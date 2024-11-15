@@ -15,7 +15,7 @@ from CrossbarModels.Crossbar_Models import *
 ############################ PARAMETERS ##############################
 
 # Dimensions of the crossbar
-array_size = np.arange(10,90,10)
+array_size = np.arange(8,129,8)
 
 # Initialize each model instance
 Models = [
@@ -26,7 +26,6 @@ Models = [
     GammaModel("Gamma_old"),
     GammaModel_acc("Gamma_acc_v1"),
     GammaModel_acc_v2("Gamma"),
-    CrossSimModel("CrossSim_old"),
     CrossSimModelv2("CrossSim"),
     LTSpiceModel("LTSpice"),
     NgSpiceModel("NgSpice"),
@@ -38,7 +37,7 @@ Models = [
 
 # enabled_models = [ "Ideal","DMR_acc","Gamma_acc", "CrossSim","Memtorch_cpp","Memtorch_python","NgSpice"]
 # enabled_models = [model.name for model in Models]
-enabled_models = [ "Ideal","Jeong","Gamma","DMR","CrossSim","Memtorch_cpp","Memtorch_python"]
+enabled_models = [ "Ideal","Jeong","Gamma","DMR","CrossSim","Memtorch_cpp"]
 
 reference_model = "NgSpice"
 
@@ -58,11 +57,11 @@ v_On_percentage = 100
 population = [1, 0.0]
 
 # Mse type (1=Current, 0=Voltage)
-current_mse = 1
+current_mse = 0
 
 # Variability parameters
 v_flag = 1
-v_size = 2
+v_size = 5
 
 enabled_models.append(reference_model)
 modelSize = len(enabled_models)
@@ -188,13 +187,11 @@ ideal_index = enabled_models.index("Ideal")
 plot_models = [model for i, model in enumerate(enabled_models) if i != ideal_index]
 
 
-
 # Plotting
 plt.figure()
 for index, model in enumerate(plot_models):
-    if index != ideal_index:
-         normalized_simulation_times = simulation_times[index,:] / simulation_times[ideal_index,:]
-         plt.plot(array_size, normalized_simulation_times, marker=markers[index % len(markers)], color=colors[index % len(colors)], label=model)
+    normalized_simulation_times = simulation_times[index+1,:] / simulation_times[ideal_index,:]
+    plt.plot(array_size, normalized_simulation_times, marker=markers[index % len(markers)], color=colors[index % len(colors)], label=model)
 # Log scale for y-axis as in the example image
 plt.yscale('log')
 plt.xlabel("Array Size")

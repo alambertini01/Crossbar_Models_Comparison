@@ -27,17 +27,6 @@ def CrossSim_Solve(
     If the circuit solver fails to find a solution, the relaxation parameter will
     be reduced until the solver converges, or a lower limit on the relaxation parameter
     is reached (returns a ValueError)
-
-    circuit_solver : function handle to the desired circuit solver
-    vector : input vector
-    matrix : normalized conductance matrix (for interleaved, this is the positive matrix)
-        params : simulation parameter object
-        interleaved : whether positive and negative resistors are interleaved in the array
-        matrix_neg  : conductance matrix for the negative weights, if interleaved
-        useMask     : whether to use a mask to improve performance with SW packing
-        mask        : mask to use with SW packing, if useMask = True
-    row_in      : inputs passed in through rows, False if inputs passed in through columns
-                    In numeric_core, row_in = True if MVM, row_in = False if VMM
     """
     solved, retry = False, False
     gamma = 0.9
@@ -75,10 +64,6 @@ def mvm_parasitics(vector, matrix, parasiticResistance, gamma, Verr_th):
 
     vector : input vector
     matrix : normalized conductance matrix
-        params : simulation parameter object
-        useMask: whether to use a mask to improve performance with SW packing
-        mask   : mask to use with SW packing, if useMask = True
-    row_in : inputs fed through rows if True, through columns if False
     """
     # Parasitic resistance
     Rp_in = Rp_out = parasiticResistance
@@ -120,7 +105,6 @@ def mvm_parasitics(vector, matrix, parasiticResistance, gamma, Verr_th):
 
     # Calculate the summed currents on the columns
     Icols = xp.sum(Ires, axis=1)
-
     # Should add some more checks here on whether the results of this calculation are erroneous even if it converged
     if Verr > Verr_th:
         raise RuntimeError("Parasitic resistance too high: could not converge!")
