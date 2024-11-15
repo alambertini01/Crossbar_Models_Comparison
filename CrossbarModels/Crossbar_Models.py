@@ -36,10 +36,17 @@ class JeongModel(CrossbarModel):
         cumsum_weights = np.cumsum(weights[::-1])[::-1]
         B_jeong = parasiticResistance * cumsum_weights
 
+        # Calculate Rd_avg (the average resistance)
+        k = 0.9
+        R_lrs = np.min(R)
+        R_hrs = np.max(R)
+        a = R_lrs**(-k)
+        b = R_hrs**(-k)
+        Rd_avg = (a * R_lrs + b * R_hrs) / (a + b)
+
         A_jeong_matrix = np.full((input, output), A_jeong)
         B_jeong_matrix = np.full((input, output), B_jeong)
-
-        R_avg_matrix = np.mean(R)
+        R_avg_matrix = np.full((input, output), Rd_avg)
         V_a_matrix = np.tile(Potential.reshape(-1, 1), output)
 
         voltage_drops_jeong = (R_avg_matrix*(np.reciprocal(A_jeong_matrix+R_avg_matrix+B_jeong_matrix.T))) * V_a_matrix

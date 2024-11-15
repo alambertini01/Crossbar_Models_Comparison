@@ -15,7 +15,7 @@ from CrossbarModels.Crossbar_Models import *
 ############################ PARAMETERS ##############################
 
 # Dimensions of the crossbar
-array_size = np.arange(8,65,8)
+array_size = np.arange(8,100,8)
 
 # Initialize each model instance
 Models = [
@@ -57,7 +57,7 @@ v_On_percentage = 100
 population = [1, 0.0]
 
 # Mse type (1=Current, 0=Voltage)
-current_mse = 0
+current_mse = 1
 
 # Variability parameters
 v_flag = 1
