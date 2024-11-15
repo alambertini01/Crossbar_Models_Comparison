@@ -15,7 +15,7 @@ from CrossbarModels.Crossbar_Models import *
 ############################ PARAMETERS ##############################
 
 # Dimensions of the crossbar
-array_size = np.arange(8,129,8)
+array_size = np.arange(8,65,8)
 
 # Initialize each model instance
 Models = [

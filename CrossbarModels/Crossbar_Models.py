@@ -302,80 +302,9 @@ class GammaModel_acc_v2(CrossbarModel):
         return  voltage_drops_gamma, current_gamma
 
 
-class CrossSimModel(CrossbarModel):
-    def calculate(self, R, parasiticResistance, Potential, **kwargs):
-        """
-        Solves for the voltages in a crossbar array with parasitic resistances.
-
-        Args:
-        vector : Input voltage vector (shape: [m, 1])
-        resistance_matrix : Resistance matrix of the crossbar (shape: [m, n])
-        Rp_row : Parasitic resistance in rows
-        Rp_col : Parasitic resistance in columns
-        Niters_max : Maximum number of iterations (default=100)
-        Verr_th : Voltage error threshold for convergence (default=2e-4)
-        gamma : Relaxation parameter for updating voltages (default=0.9)
-
-        Returns:
-        dV : Matrix of node voltages after convergence (shape: [m, n])
-        """
-        input, output = R.shape
-        Niters_max=100
-        Verr_th=2e-4
-        gamma=0.9
-
-        # Initialize error and number of iterations
-        Verr = 1e9
-        Niters = 0
-
-        # Initial estimate of device voltages/currents
-        dV0 = np.tile(Potential.reshape(-1, 1), output)
-        Ires = dV0 / R  # Initial currents
-        dV = dV0.copy()  # Initial voltage estimate
-
-        # Iteratively calculate parasitics and update device currents
-        while Verr > Verr_th and Niters < Niters_max:
-
-            # Calculate parasitic voltage drops
-            Isum_col = np.cumsum(Ires, 1)
-            Isum_row = np.cumsum(Ires[::-1], 0)[::-1]
-
-            Vdrops_col = parasiticResistance * np.cumsum(Isum_col[:, ::-1], 1)
-            Vdrops_row = parasiticResistance * np.cumsum(Isum_row, 0)[::-1,:]
-            Vpar = Vdrops_col + Vdrops_row
-
-            # Calculate the error for the current estimate of memristor currents
-            VerrMat = dV0 - Vpar - dV
-
-            # Evaluate overall error
-            Verr = np.max(np.abs(VerrMat))
-            if Verr < Verr_th:
-                break
-
-            # Update memristor currents for the next iteration
-            dV += gamma * VerrMat
-            Ires = dV / R
-            Niters += 1
-
-        # Check for convergence issues
-        if Verr > Verr_th:
-            print("CrossSim Fail ---- Parasitic resistance too high: could not converge!")
-        if np.isnan(dV).any():
-            raise RuntimeError("CrossSim Fail ---- NaNs detected in voltage matrix!")
-
-        # print("                    Number of iterations: ", Niters)
-
-        voltage_crossSim = dV
-        current_crossSim=np.sum(Ires, axis=0)
-
-        return voltage_crossSim, current_crossSim
-
-
 class CrossSimModelv2(CrossbarModel):
     def calculate(self, R, parasiticResistance, Potential, **kwargs):
         return CrossSim_Solve(np.reciprocal(R.T),parasiticResistance,Potential)
-    
-
 
 
 
@@ -383,8 +312,8 @@ class IdealModel(CrossbarModel):
     def calculate(self, R, parasiticResistance, Potential, **kwargs):
 
         input, output = R.shape
-        voltage_ideal = np.full((input, output), Potential).T
-        current_ideal = np.cumsum(voltage_ideal*np.reciprocal(R),axis=0)[input-1,:]
+        voltage_ideal = np.tile(Potential.reshape(-1, 1), output)
+        current_ideal = np.sum(voltage_ideal*np.reciprocal(R),axis=0)
         return voltage_ideal, current_ideal
 
 
@@ -442,7 +371,7 @@ class LTSpiceModel(CrossbarModel):
         current_matrix, current_real = LTSpice_Sim(real,  current_matrix)
 
         voltage_real = current_matrix * R
-        current_real = np.cumsum(voltage_real*np.reciprocal(R),axis=0)[input-1,:]
+        current_real = np.sum(voltage_real*np.reciprocal(R),axis=0)
         return voltage_real, current_real
 
 
@@ -467,7 +396,7 @@ class MemtorchModelCpp(CrossbarModel):
         # Convert the output to numpy for plotting
         voltage_drops_np = voltage_drops.cpu().detach().numpy()
         # output_currents_np = output_currents.cpu().detach().numpy()
-        output_currents_np = np.cumsum(voltage_drops_np*np.reciprocal(R),axis=0)[conductance_matrix.shape[0]-1,:]
+        output_currents_np = np.sum(voltage_drops_np*np.reciprocal(R),axis=0)
 
         return voltage_drops_np, output_currents_np
     
