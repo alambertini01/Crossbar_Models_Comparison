@@ -20,21 +20,20 @@ The simulator is modular, allowing activation or deactivation of models and cust
   - **LTSpice**
   - **NgSpice (linear and nonlinear)**
   - **Memtorch (Python and C++ implementations)**
-- **Reference Model Selection**:  
   Choose any model as the reference for comparisons. Default: `NgSpice`.
-- **Parameter Tuning**:
+- **Parameters**:
   - Crossbar array dimensions (default: `32x32`)
   - Parasitic resistance
   - Memory window
-  - Low and high resistance programming values
-- **Variability Simulation**:  
-  Supports variability in device parameters.
+  - Device variability.
+  - Device non-linearities.
+    The simulator allows the parameters to be range of values and performs a simulation sweep.
 - **Multiple Visualizations**:
   - Simulation times
   - Relative and absolute output currents
-  - Voltage drops
+  - Voltage drops Heatmaps
   - Accuracy trends (e.g., vs. parasitic resistance, memory window)
-  - Heatmaps and scatter plots
+  - Scatter plots
 
 ---
 
