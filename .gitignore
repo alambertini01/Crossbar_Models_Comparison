@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+backups/
+LTSpice/
+Results/
+.vscode/
+env/
+.venv
+*.log
+*.sqlite3
+*.DS_Store
+*.ipynb_checkpoints
