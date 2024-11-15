@@ -27,7 +27,7 @@ The simulator is modular, allowing activation or deactivation of models and cust
   - Memory window
   - Device variability.
   - Device non-linearities.
-    The simulator allows the parameters to be range of values and performs a simulation sweep.
+  The simulator allows the parameters to be range of values and performs a simulation sweep.
 - **Multiple Visualizations**:
   - Simulation times
   - Relative and absolute output currents
