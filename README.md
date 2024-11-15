@@ -20,6 +20,8 @@ The simulator is modular, allowing activation or deactivation of models and cust
   - **LTSpice**
   - **NgSpice (linear and nonlinear)**
   - **Memtorch (Python and C++ implementations)**
+
+
   Choose any model as the reference for comparisons. Default: `NgSpice`.
 - **Parameters**:
   - Crossbar array dimensions (default: `32x32`)
@@ -27,6 +29,8 @@ The simulator is modular, allowing activation or deactivation of models and cust
   - Memory window
   - Device variability.
   - Device non-linearities.
+ 
+    
   The simulator allows the parameters to be range of values and performs a simulation sweep.
 - **Multiple Visualizations**:
   - Simulation times
