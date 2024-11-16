@@ -44,7 +44,7 @@ The simulator is modular, allowing activation or deactivation of models and cust
 ## **Getting Started**
 1. **Clone the repository:**
        ```bash
-       git clone https://github.com/yourusername/your-repo.git
+       git clone [https://github.com/yourusername/your-repo.git](https://github.com/alambertini01/Crossbar_Models_Comparison)
        cd your-repo
 
 2. **Set up a virtual environment (optional):**
