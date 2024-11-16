@@ -47,7 +47,7 @@ The simulator is modular, allowing activation or deactivation of models and cust
   ```bash
   git clone https://github.com/alambertini01/Crossbar_Models_Comparison
   cd Crossbar_Models_Comparison
-
+  ```
 
 3. **Set up a virtual environment (optional):**
 
@@ -57,11 +57,13 @@ The simulator is modular, allowing activation or deactivation of models and cust
     ```bash
     python -m venv venv
     venv\Scripts\activate
+    ```
   For macOS/Linux:
 
     ```bash
     python3 -m venv venv
     source venv/bin/activate
+    ```
 
 
 3. **Install the package:**
