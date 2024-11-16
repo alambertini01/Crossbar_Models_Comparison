@@ -43,23 +43,24 @@ The simulator is modular, allowing activation or deactivation of models and cust
 
 ## **Getting Started**
 1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/yourusername/your-repo.git
-   cd your-repo
+       ```bash
+       git clone https://github.com/yourusername/your-repo.git
+       cd your-repo
 
 2. **Set up a virtual environment (optional):**
 
-For Windows:
+  For Windows:
 
-  ```bash
-  python -m venv venv
-  venv\Scripts\activate
+  
+    ```bash
+    python -m venv venv
+    venv\Scripts\activate
+  For macOS/Linux:
 
-For macOS/Linux:
+    ```bash
+    python3 -m venv venv
+    source venv/bin/activate
 
-  ```bash
-  python3 -m venv venv
-  source venv/bin/activate
 
 3. **Install the package:**
 
