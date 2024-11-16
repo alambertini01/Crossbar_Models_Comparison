@@ -22,7 +22,7 @@ from CrossbarModels.Crossbar_Models import *
 ############################ PARAMETERS ##############################
 
 # Dimensions of the crossbar
-input,output = (32,32)
+input,output = (64,64)
 
 # Initialize each model instance
 Models = [
@@ -44,9 +44,9 @@ Models = [
 
 # enabled_models = [ "Ideal","DMR_acc","Gamma_acc", "CrossSim","Memtorch_cpp","Memtorch_python","NgSpice"]
 # enabled_models = [model.name for model in Models]
-enabled_models = [ "CrossSim","Memtorch_cpp" ]
+enabled_models = [ "Ideal","Jeong","Gamma","DMR","CrossSim"]
 
-reference_model = "NgSpice"
+reference_model = "Memtorch_cpp"
 
 # Low resistance proggramming value
 R_lrs = 1000
@@ -68,7 +68,7 @@ current_mse = 1
 
 # Variability parameters
 v_flag = 1
-v_size = 10
+v_size = 5
 
 
 
@@ -307,10 +307,10 @@ for z in range(np.size(parasiticResistance)):
                     # Plot relative errors
                     axis1[m].plot(x, relative_Current * 100, color=colors[index % len(colors)], marker='.', label=(model+'/Real'))
                     axis1[m].set_title(f"Relative Error  (MW = {memoryWindow[m]}, Rpar = {parasiticResistance[z]} Ohm)"+ '\n'+array_size_string)
-                    axis1[m].set(xlabel='jth bit line', ylabel='Percentage')
+                    axis1[m].set(xlabel='jth bit line', ylabel='Normalized Output Current Error (%)')
                     axis1[m].legend()
         figure1.tight_layout()
-        figure1.savefig(folder + f'/Figure1_Relative_Error{z}.png')
+        figure1.savefig(folder + f'/Figure_Relative_Current_Error_Rpar={z}.png')
         figure1.show()
 
     if Absolute_current_plots:
@@ -338,7 +338,7 @@ if Voltage_drops_plot:
             voltage_fig = plt.figure(figsize=(15, 10))
             for index, model in enumerate(enabled_models):
                 # Plot heatmap for each model
-                plt.subplot(2, 3, index+1)  # 1 row, 3 columns, 1st subplot
+                plt.subplot(2, round(modelSize/2), index+1)  # 1 row, 3 columns, 1st subplot
                 plt.imshow(voltage_drops[:,:,z,m,index], cmap='hot', interpolation='nearest',vmin=Vmin, vmax=1)
                 plt.colorbar(label='Voltage Drop (V)')
                 plt.title('Voltage Drop Heatmap ('+ model +'Model)')

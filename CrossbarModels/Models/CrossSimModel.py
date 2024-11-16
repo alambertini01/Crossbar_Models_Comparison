@@ -29,7 +29,8 @@ def CrossSim_Solve(
     is reached (returns a ValueError)
     """
     solved, retry = False, False
-    gamma = 0.9
+    input,output = xp.shape(matrix)
+    gamma = min(0.9,50/(input+output))
     Verr_th = 2e-4
     hide_convergence_msg=0
 
