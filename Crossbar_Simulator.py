@@ -53,11 +53,11 @@ R_lrs = 1000
 Rhrs_percentage=50
 # parasitic resistance value
 parasiticResistance = np.arange(0.1, 5, 0.5)
-parasiticResistance = np.array([1])
+# parasiticResistance = np.array([1])
 
 # Memory window (ratio between Hrs and Lrs)
 memoryWindow = np.arange(5, 100, 5)
-memoryWindow = np.array([20])
+# memoryWindow = np.array([20])
 
 # Input voltages parameters
 v_On_percentage = 100

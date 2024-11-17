@@ -15,10 +15,11 @@ class PostInstallCommand(install):
         # Execute custom commands after installation
         os.system("pyspice-post-installation --install-ngspice-dll")
         os.system("pyspice-post-installation --check-install")
+        
 
 # Setup function
 setup(
-    name="Crossbar_Parasitics_Simulator", 
+    name="Crossbar_Models_Comparison", 
     version="0.1.0",  # Package version
     author="Alessandro Lambertini",
     author_email="alessandro.lambertini6@gmail.com",
