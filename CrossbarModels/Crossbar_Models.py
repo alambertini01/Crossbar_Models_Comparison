@@ -135,6 +135,42 @@ class DMRModel_acc(CrossbarModel):
         voltage_drops_dmr = A_dmr @ V_a_matrix @ B_dmr
 
         return voltage_drops_dmr, current_dmr
+    
+
+class DMRModel_new(CrossbarModel):
+    def calculate(self, R, parasiticResistance, Potential, **kwargs):
+
+        input, output = R.shape
+        G = np.reciprocal(R)
+        g_bit = 1/parasiticResistance
+        g_word = 1/parasiticResistance
+
+        a_dmr = [0]*input
+        b_dmr = [0]*output
+        
+        gAverageRow = G.mean(1)
+        gAverageCol = G.mean(0)
+
+        weights = np.arange(input, 0, -1)  # [input, input-1, ..., 1]
+        Summation_bit = np.sum(weights * gAverageRow)
+        # For Summation1, we need cumulative sum up to j for each j
+        indices = np.arange(input)
+        Summation1 = indices * np.cumsum(gAverageRow) - np.cumsum(indices * gAverageRow)
+        a_dmr = (1 + Summation1/g_bit)/(1 + Summation_bit/g_bit)
+        
+        # Creation of the diag matrices A and B with the vector a and b
+        A_dmr = np.diag(a_dmr)
+        B_dmr = np.diag(b_dmr)
+        W_dmr = A_dmr.dot(G).dot(B_dmr)
+
+        V_a_matrix = np.tile(Potential.reshape(-1, 1), output)
+        current_dmr = Potential.dot(W_dmr)
+        voltage_drops_dmr = A_dmr @ V_a_matrix @ B_dmr
+
+        return voltage_drops_dmr, current_dmr
+
+
+
 
 class GammaModel(CrossbarModel):
     def calculate(self, R, parasiticResistance, Potential, **kwargs):
@@ -310,7 +346,22 @@ class GammaModel_acc_v2(CrossbarModel):
         return  voltage_drops_gamma, current_gamma
 
 
-class CrossSimModelv2(CrossbarModel):
+class CrossSimModel_p1(CrossbarModel):
+    def calculate(self, R, parasiticResistance, Potential, **kwargs):
+        Verr_th = 5e-1
+        return CrossSim_Solve(np.reciprocal(R.T),parasiticResistance,Potential,Verr_th)
+    
+class CrossSimModel_p2(CrossbarModel):
+    def calculate(self, R, parasiticResistance, Potential, **kwargs):
+        Verr_th = 5e-2
+        return CrossSim_Solve(np.reciprocal(R.T),parasiticResistance,Potential,Verr_th)
+    
+class CrossSimModel_p3(CrossbarModel):
+    def calculate(self, R, parasiticResistance, Potential, **kwargs):
+        Verr_th = 5e-3
+        return CrossSim_Solve(np.reciprocal(R.T),parasiticResistance,Potential,Verr_th)
+
+class CrossSimModel(CrossbarModel):
     def calculate(self, R, parasiticResistance, Potential, **kwargs):
         return CrossSim_Solve(np.reciprocal(R.T),parasiticResistance,Potential)
 

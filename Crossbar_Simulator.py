@@ -10,6 +10,7 @@ from tkinter import ttk
 import pandas as pd
 import openpyxl
 from openpyxl.styles import PatternFill
+from sklearn.linear_model import LinearRegression
 #Import NonLinear functions
 from CrossbarModels.Functions.NonLinear import resistance_array_to_x
 from CrossbarModels.Functions.NonLinear import calculate_resistance
@@ -22,7 +23,7 @@ from CrossbarModels.Crossbar_Models import *
 ############################ PARAMETERS ##############################
 
 # Dimensions of the crossbar
-input,output = (64,64)
+input,output = (128,128)
 
 # Initialize each model instance
 Models = [
@@ -30,34 +31,38 @@ Models = [
     IdealModel("Ideal"),
     DMRModel("DMR_old"),
     DMRModel_acc("DMR"),
+    DMRModel_new("DMR_new"),
     GammaModel("Gamma_old"),
     GammaModel_acc("Gamma_acc_v1"),
     GammaModel_acc_v2("Gamma"),
-    CrossSimModelv2("CrossSim"),
+    CrossSimModel_p1("CrossSim1"),
+    CrossSimModel_p2("CrossSim2"),
+    CrossSimModel_p3("CrossSim3"),
+    CrossSimModel("CrossSim4"),
     LTSpiceModel("LTSpice"),
     NgSpiceModel("NgSpice"),
     NgSpiceNonLinearModel("NgSpiceNonLinear"),
-    MemtorchModelCpp("Memtorch_cpp"),
+    MemtorchModelCpp("Memtorch"),
     MemtorchModelPython("Memtorch_python")
 ]
 
 
 # enabled_models = [ "Ideal","DMR_acc","Gamma_acc", "CrossSim","Memtorch_cpp","Memtorch_python","NgSpice"]
 # enabled_models = [model.name for model in Models]
-enabled_models = [ "Ideal","Jeong","Gamma","DMR","CrossSim"]
+enabled_models = [ "Ideal","Jeong","DMR","Gamma","CrossSim1","CrossSim2","CrossSim3","CrossSim4"]
 
-reference_model = "Memtorch_cpp"
+reference_model = "Memtorch"
 
 # Low resistance proggramming value
 R_lrs = 1000
-Rhrs_percentage=50
+Rhrs_percentage=70
 # parasitic resistance value
 parasiticResistance = np.arange(0.1, 5, 0.5)
-# parasiticResistance = np.array([1])
+parasiticResistance = np.array([2])
 
 # Memory window (ratio between Hrs and Lrs)
 memoryWindow = np.arange(5, 100, 5)
-# memoryWindow = np.array([20])
+memoryWindow = np.array([20])
 
 # Input voltages parameters
 v_On_percentage = 100
@@ -68,7 +73,7 @@ current_mse = 1
 
 # Variability parameters
 v_flag = 1
-v_size = 5
+v_size = 20
 
 
 
@@ -209,6 +214,7 @@ root.destroy()  # Close the window when simulation is complete
 
 # plot parameters
 colors = ['g', 'r', 'b', 'm', 'c', 'y', 'orange', 'purple', 'pink', 'brown', 'lime', 'teal']
+colors = ['black','c', 'g', 'r', 'b', 'b', 'b', 'b', 'orange', 'purple', 'pink', 'brown', 'lime', 'teal']
 markers = ['o', 's', 'D', '^', 'v', 'p']
 
 # Figures Selection
@@ -217,8 +223,8 @@ Simulation_times_plot = 1
 Absolute_current_plots = 1
 Relative_error_plots = 1
 
-Voltage_drops_plot = 1
-Voltage_drops_error_plot = 1
+Voltage_drops_plot = 0
+Voltage_drops_error_plot = 0
 
 MSE_plot = 1
 Mean_MSE_plot = 1
@@ -274,7 +280,7 @@ if Simulation_times_plot:
         new_simulation_times = np.delete(normalized_simulation_times, index)
         plt.title('Normalized Processing Time relative to the Ideal Model'+ '\n'+array_size_string)
         plt.ylabel('Normalized Time (log scale)')
-        bars = plt.bar(new_enabled_models, new_simulation_times, color=[colors[i % len(colors)] for i in range(len(enabled_models))])
+        bars = plt.bar(new_enabled_models, new_simulation_times, color=[colors[(i+1) % len(colors)] for i in range(len(enabled_models))])
     else:
         plt.title('Processing Time for Each Model (Log Scale)'+ '\n'+array_size_string)
         plt.ylabel('Time (seconds, log scale)')
@@ -305,7 +311,7 @@ for z in range(np.size(parasiticResistance)):
                     # Calculate relative currents
                     relative_Current = np.abs(output_currents[:, z, m, reference_index] - output_currents[:, z, m, index] ) / output_currents[:, z, m, reference_index]
                     # Plot relative errors
-                    axis1[m].plot(x, relative_Current * 100, color=colors[index % len(colors)], marker='.', label=(model+'/Real'))
+                    axis1[m].plot(x, relative_Current * 100, color=colors[index % len(colors)], marker='.', label=(model))
                     axis1[m].set_title(f"Relative Error  (MW = {memoryWindow[m]}, Rpar = {parasiticResistance[z]} Ohm)"+ '\n'+array_size_string)
                     axis1[m].set(xlabel='jth bit line', ylabel='Normalized Output Current Error (%)')
                     axis1[m].legend()
@@ -341,7 +347,7 @@ if Voltage_drops_plot:
                 plt.subplot(2, round(modelSize/2), index+1)  # 1 row, 3 columns, 1st subplot
                 plt.imshow(voltage_drops[:,:,z,m,index], cmap='hot', interpolation='nearest',vmin=Vmin, vmax=1)
                 plt.colorbar(label='Voltage Drop (V)')
-                plt.title('Voltage Drop Heatmap ('+ model +'Model)')
+                plt.title('Voltage Drop Heatmap ('+ model +')')
                 plt.xlabel('Column Index (j)')
                 plt.ylabel('Row Index (m)')
             plt.tight_layout()
@@ -363,7 +369,7 @@ if Voltage_drops_error_plot:
                     plt.subplot(2, round(modelSize/2), index+1)  # 1 row, 3 columns, 1st subplot
                     plt.imshow(relative_voltage_drops, cmap='hot', interpolation='nearest',vmax = 1 )
                     plt.colorbar(label='Voltage Drop error (V)')
-                    plt.title('Voltage Drop error ('+ model +'Model)')
+                    plt.title('Voltage Drop error ('+ model +')')
                     plt.xlabel('Column Index (j)')
                     plt.ylabel('Row Index (m)')
             plt.tight_layout()
@@ -494,36 +500,60 @@ if print_table:
     os.startfile(excel_path)
 
     
+
+
 if scatter_plot:
     mean_mse = np.mean(mse, axis=0).mean(axis=0)
+    variance_mse = np.var(mse, axis=0).mean(axis=0)  # Compute variance
     if "Ideal" in enabled_models:
         ideal_index = enabled_models.index("Ideal")
         normalized_simulation_times = simulation_times / simulation_times[ideal_index]
         plot_models = [model for i, model in enumerate(enabled_models) if i != ideal_index]
         plot_times = np.delete(normalized_simulation_times, ideal_index)
         plot_mse = np.delete(mean_mse, ideal_index)
+        plot_variance = np.delete(variance_mse, ideal_index)  # Adjust variance array
     else:
         plot_models = enabled_models
         plot_times = simulation_times
         plot_mse = mean_mse
+        plot_variance = variance_mse  # Use full variance array
     fig, ax = plt.subplots()
+    # Filter data for "CrossSim" models
+    crosssim_indices = [i for i, model in enumerate(plot_models) if model.startswith("CrossSim")]
+    if crosssim_indices:
+        crosssim_times = np.array(plot_times)[crosssim_indices].reshape(-1, 1)
+        crosssim_mse = np.array(plot_mse)[crosssim_indices]
+        # Fit a linear regression model
+        reg = LinearRegression().fit(np.log(crosssim_times), np.log(crosssim_mse))  # Log scale for both time and mse
+        reg_line_x = np.linspace(crosssim_times.min(), crosssim_times.max(), 100).reshape(-1, 1)
+        reg_line_y = np.exp(reg.predict(np.log(reg_line_x)))  # Convert the predicted log values back to the original scale
+        # Plot regression line
+        ax.plot(reg_line_x, reg_line_y, color='blue', linestyle='--', linewidth=1.5, label='CrossSim Regression')
     scatter = ax.scatter(plot_times, plot_mse, 
-                        c=[colors[i % len(colors)] for i in range(len(plot_models))],
+                        c=[colors[(i+1) % len(colors)] for i in range(len(plot_models))],
                         s=120, marker='o', edgecolor="black", linewidth=0.7)
+    # Plot variance bars
+    for i, (x, y, var) in enumerate(zip(plot_times, plot_mse, plot_variance)):
+        ax.errorbar(x, y, yerr=np.sqrt(var), fmt='o', color=colors[(i+1) % len(colors)], capsize=5)
     for i, model in enumerate(plot_models):
-        ax.annotate(
-            model, (plot_times[i], plot_mse[i]),
-            textcoords="offset points", xytext=(10, 10), ha='center'
-        )
+        if not model.startswith("CrossSim"):
+            ax.annotate(
+                model, (plot_times[i], plot_mse[i]),
+                textcoords="offset points", xytext=(10, 0), ha='left'  # Adjusted position to the right
+            )
     ax.grid(True, which="both", linestyle='--', linewidth=0.5, color="gray", alpha=0.7)
     # Highlight Pareto front
     sorted_indices = np.argsort(plot_times)
     pareto_times = np.array(plot_times)[sorted_indices]
     pareto_mse = np.array(plot_mse)[sorted_indices]
-    # Legend and labels
-    legend_handles = [plt.Line2D([0], [0], marker='o', color='w', label=plot_models[i],
-                                markerfacecolor=colors[i % len(colors)], markersize=10)
-                    for i in range(len(plot_models))]
+    # Legend Handles
+    legend_handles = [
+        plt.Line2D([0], [0], marker='o', color='w', label=plot_models[i],
+                markerfacecolor=colors[(i+1) % len(colors)], markersize=10)
+        for i in range(len(plot_models)) if i not in crosssim_indices
+    ]
+    # Add regression line to the legend
+    legend_handles.append(plt.Line2D([0], [0], color='blue', linestyle='--', label='CrossSim'))
     ax.legend(handles=legend_handles, title="Models", bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
     # Set log scale for x-axis (simulation time)
     ax.set_xscale('log')
@@ -534,6 +564,8 @@ if scatter_plot:
     plt.tight_layout()
     plt.savefig(folder + '/Figure_Scatter_SimulationTimes_vs_error.png')
     plt.show()
+
+
 
 
 if Resistance_heatmap:
