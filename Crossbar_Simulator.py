@@ -23,7 +23,7 @@ from CrossbarModels.Crossbar_Models import *
 ############################ PARAMETERS ##############################
 
 # Dimensions of the crossbar
-input,output = (128,128)
+input,output = (64,64)
 
 # Initialize each model instance
 Models = [
@@ -37,7 +37,7 @@ Models = [
     GammaModel_acc_v2("Gamma"),
     CrossSimModel_p1("CrossSim1"),
     CrossSimModel_p2("CrossSim2"),
-    CrossSimModel_p3("CrossSim3"),
+    CrossSimModel_p3("CrossSim"),
     CrossSimModel("CrossSim4"),
     LTSpiceModel("LTSpice"),
     NgSpiceModel("NgSpice"),
@@ -49,20 +49,20 @@ Models = [
 
 # enabled_models = [ "Ideal","DMR_acc","Gamma_acc", "CrossSim","Memtorch_cpp","Memtorch_python","NgSpice"]
 # enabled_models = [model.name for model in Models]
-enabled_models = [ "Ideal","Jeong","DMR","Gamma","CrossSim1","CrossSim2","CrossSim3","CrossSim4"]
+enabled_models = [ "Ideal","Jeong","DMR","Gamma"]
 
-reference_model = "Memtorch"
+reference_model = "CrossSim"
 
 # Low resistance proggramming value
 R_lrs = 1000
-Rhrs_percentage=70
+Rhrs_percentage=50
 # parasitic resistance value
-parasiticResistance = np.arange(0.1, 5, 0.5)
-parasiticResistance = np.array([2])
+parasiticResistance = np.arange(0.2, 3, 0.2)
+#parasiticResistance = np.array([2])
 
 # Memory window (ratio between Hrs and Lrs)
-memoryWindow = np.arange(5, 100, 5)
-memoryWindow = np.array([20])
+memoryWindow = np.arange(5, 101, 5)
+#memoryWindow = np.array([20])
 
 # Input voltages parameters
 v_On_percentage = 100
@@ -73,7 +73,7 @@ current_mse = 1
 
 # Variability parameters
 v_flag = 1
-v_size = 20
+v_size = 50
 
 
 
@@ -214,7 +214,7 @@ root.destroy()  # Close the window when simulation is complete
 
 # plot parameters
 colors = ['g', 'r', 'b', 'm', 'c', 'y', 'orange', 'purple', 'pink', 'brown', 'lime', 'teal']
-colors = ['black','c', 'g', 'r', 'b', 'b', 'b', 'b', 'orange', 'purple', 'pink', 'brown', 'lime', 'teal']
+colors = ['black','c', 'g', 'r', 'b', 'orange', 'purple', 'pink', 'brown', 'lime', 'teal']
 markers = ['o', 's', 'D', '^', 'v', 'p']
 
 # Figures Selection
@@ -223,8 +223,8 @@ Simulation_times_plot = 1
 Absolute_current_plots = 1
 Relative_error_plots = 1
 
-Voltage_drops_plot = 0
-Voltage_drops_error_plot = 0
+Voltage_drops_plot = 1
+Voltage_drops_error_plot = 1
 
 MSE_plot = 1
 Mean_MSE_plot = 1
