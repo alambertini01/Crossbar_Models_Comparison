@@ -15,7 +15,7 @@ from CrossbarModels.Crossbar_Models import *
 ############################ PARAMETERS ##############################
 
 # Dimensions of the crossbar
-array_size = np.arange(8,100,8)
+array_size = np.arange(8,130,8)
 
 # Initialize each model instance
 Models = [
@@ -46,7 +46,7 @@ R_lrs = 1000
 Rhrs_percentage=50
 # parasitic resistance value
 parasiticResistance = np.arange(0.1, 10.1, 0.5)
-parasiticResistance = np.array([1])
+parasiticResistance = np.array([2])
 
 # Memory window (ratio between Hrs and Lrs)
 memoryWindow = np.arange(10, 100.1, 10)
@@ -166,7 +166,7 @@ for d in range(np.size(array_size)):
 ###################### Plotting portion ##########################################################################
 
 # plot parameters
-colors = ['g', 'r', 'b', 'm', 'c', 'y', 'orange', 'purple', 'pink', 'brown', 'lime', 'teal']
+colors = ['c','r', 'g', 'b', 'orange', 'purple', 'pink', 'brown', 'lime', 'teal']
 markers = ['o', 's', 'D', '^', 'v', 'p']
 
 # Results Folder
