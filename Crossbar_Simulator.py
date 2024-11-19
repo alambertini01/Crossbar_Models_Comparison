@@ -4,6 +4,9 @@ import pytz
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+from matplotlib.patches import Patch
+from matplotlib.colors import to_hex
 import time
 import tkinter as tk
 from tkinter import ttk
@@ -23,7 +26,7 @@ from CrossbarModels.Crossbar_Models import *
 ############################ PARAMETERS ##############################
 
 # Dimensions of the crossbar
-input,output = (64,64)
+input,output = (32,32)
 
 # Initialize each model instance
 Models = [
@@ -35,9 +38,9 @@ Models = [
     GammaModel("Gamma_old"),
     GammaModel_acc("Gamma_acc_v1"),
     GammaModel_acc_v2("Gamma"),
-    CrossSimModel_p1("CrossSim1"),
+    CrossSimModel_p1("CrossSim"),
     CrossSimModel_p2("CrossSim2"),
-    CrossSimModel_p3("CrossSim"),
+    CrossSimModel_p3("CrossSim3"),
     CrossSimModel("CrossSim4"),
     LTSpiceModel("LTSpice"),
     NgSpiceModel("NgSpice"),
@@ -49,31 +52,31 @@ Models = [
 
 # enabled_models = [ "Ideal","DMR_acc","Gamma_acc", "CrossSim","Memtorch_cpp","Memtorch_python","NgSpice"]
 # enabled_models = [model.name for model in Models]
-enabled_models = [ "Ideal","Jeong","DMR","Gamma"]
+enabled_models = [ "Ideal","Jeong","DMR","Gamma","CrossSim"]
 
-reference_model = "CrossSim"
+reference_model = "CrossSim3"
 
 # Low resistance proggramming value
 R_lrs = 1000
 Rhrs_percentage=50
 # parasitic resistance value
-parasiticResistance = np.arange(0.2, 3, 0.2)
-#parasiticResistance = np.array([2])
+parasiticResistance = np.arange(0.2, 5, 0.2)
+# parasiticResistance = np.array([2])
 
 # Memory window (ratio between Hrs and Lrs)
 memoryWindow = np.arange(5, 101, 5)
-#memoryWindow = np.array([20])
+# memoryWindow = np.array([20])
 
 # Input voltages parameters
 v_On_percentage = 100
 population = [1, 0.0]
 
-# Mse type (1=Current, 0=Voltage)
-current_mse = 1
+# Metric type (2=Current*Times, 1=Current, 0=Voltage)
+Metric_type = 2
 
 # Variability parameters
 v_flag = 1
-v_size = 50
+v_size = 5
 
 
 
@@ -133,8 +136,9 @@ output_currents = np.zeros((output, parasiticSize ,memorySize, modelSize))
 V_a_matrix = np.tile(Potential, output)
 voltage_drops = np.zeros((input,output, parasiticSize ,memorySize, modelSize))
 
-# Initialize mse array
-mse = np.zeros((parasiticSize ,memorySize, modelSize))
+# Initialize Metric arrays
+Current_error = np.zeros((parasiticSize ,memorySize, modelSize))
+Voltage_error = np.zeros((parasiticSize ,memorySize, modelSize))
 
 # Initialize time measurements
 simulation_times = np.zeros(modelSize)
@@ -191,14 +195,26 @@ for m in range(memorySize):
                     simulation_times[index] += (end_time - start_time)/totalIterations
                     
             for index, model in enumerate(enabled_models):
-                if current_mse:
-                    # Compute Output Current MSE
-                    mse[z, m, index] += np.mean(np.abs(output_currents[:, z, m, reference_index] - output_currents[:, z, m, index] ) / output_currents[:, z, m, reference_index])*100/v_size
-                else:
-                    # Compute Voltage MSE
-                    mse[z, m, index] += np.mean(np.abs((voltage_drops[:,:,z,m,reference_index] - voltage_drops[:,:,z,m,index]))/voltage_drops[:,:,z,m,reference_index])*100/v_size
+                # Compute Output Current Metric
+                Current_error[z, m, index] += np.mean(np.abs(output_currents[:, z, m, reference_index] - output_currents[:, z, m, index] ) / output_currents[:, z, m, reference_index])*100/v_size
+                # Compute Voltage Metric
+                Voltage_error[z, m, index] += np.mean(np.abs((voltage_drops[:,:,z,m,reference_index] - voltage_drops[:,:,z,m,index]))/voltage_drops[:,:,z,m,reference_index])*100/v_size
 
 root.destroy()  # Close the window when simulation is complete
+
+if Metric_type==2:
+    Metric = Current_error * simulation_times[np.newaxis, np.newaxis, :]
+elif Metric_type==1:
+    Metric = Current_error
+else:
+    Metric = Voltage_error
+
+if "Ideal" in enabled_models:
+    index = enabled_models.index("Ideal")
+    # Divide simulation_times by the element at the found index
+    normalized_simulation_times = simulation_times / simulation_times[index]
+    if Metric_type==2:
+        Metric = np.reciprocal(Current_error[:,:,:-1] * normalized_simulation_times[np.newaxis, np.newaxis, :-1])
 
 
 
@@ -226,10 +242,11 @@ Relative_error_plots = 1
 Voltage_drops_plot = 1
 Voltage_drops_error_plot = 1
 
-MSE_plot = 1
-Mean_MSE_plot = 1
-MSE_vs_Rpar = 1
-MSE_vs_MW = 1
+Metric_plot = 1
+Mean_Metric_plot = 1
+Metric_vs_Rpar = 1
+Metric_vs_MW = 1
+Winning_models_map = 1
 print_table = 1
 scatter_plot = 1
 
@@ -254,14 +271,16 @@ if memorySize>3 or parasiticSize>3:
     Voltage_drops_error_plot = 0
     Resistance_heatmap =0
 else:
-    MSE_plot=0
-    MSE_vs_Rpar=0
-    MSE_vs_MW=0
+    Metric_plot=0
+    Metric_vs_Rpar=0
+    Metric_vs_MW=0
     print_table=0
 
 # Different labels based on the used metric
-if current_mse:
+if Metric_type:
     error_label = "Normalized Output Current Error (%)"
+    if Metric_type==2:
+        error_label = "Precision over Execution Time [1/s]"
 else:
     error_label = "Normalized Voltage Drops Error (%)"
 array_size_string = "Array Size: "+ str(input) + 'x' + str(output)
@@ -272,9 +291,6 @@ array_size_string = "Array Size: "+ str(input) + 'x' + str(output)
 if Simulation_times_plot:
     plt.figure()
     if "Ideal" in enabled_models:
-        index = enabled_models.index("Ideal")
-        # Divide simulation_times by the element at the found index
-        normalized_simulation_times = simulation_times / simulation_times[index]
         # Create new lists/arrays without the "Ideal" element
         new_enabled_models = [model for i, model in enumerate(enabled_models) if i != index]
         new_simulation_times = np.delete(normalized_simulation_times, index)
@@ -344,7 +360,7 @@ if Voltage_drops_plot:
             voltage_fig = plt.figure(figsize=(15, 10))
             for index, model in enumerate(enabled_models):
                 # Plot heatmap for each model
-                plt.subplot(2, round(modelSize/2), index+1)  # 1 row, 3 columns, 1st subplot
+                plt.subplot(2, round((modelSize+1)/2), index+1)  # 1 row, 3 columns, 1st subplot
                 plt.imshow(voltage_drops[:,:,z,m,index], cmap='hot', interpolation='nearest',vmin=Vmin, vmax=1)
                 plt.colorbar(label='Voltage Drop (V)')
                 plt.title('Voltage Drop Heatmap ('+ model +')')
@@ -366,7 +382,7 @@ if Voltage_drops_error_plot:
                 if model != reference_model:
                     relative_voltage_drops = np.abs((voltage_drops[:,:,z,m,reference_index] - voltage_drops[:,:,z,m,index]))/voltage_drops[:,:,z,m,reference_index]
                     # Plot heatmap for each model
-                    plt.subplot(2, round(modelSize/2), index+1)  # 1 row, 3 columns, 1st subplot
+                    plt.subplot(2, round((modelSize+1)/2), index+1)  # 1 row, 3 columns, 1st subplot
                     plt.imshow(relative_voltage_drops, cmap='hot', interpolation='nearest',vmax = 1 )
                     plt.colorbar(label='Voltage Drop error (V)')
                     plt.title('Voltage Drop error ('+ model +')')
@@ -377,8 +393,8 @@ if Voltage_drops_error_plot:
             relative_voltage_fig.show()
 
 
-if MSE_plot:
-    # 3D plots of the MSE
+if Metric_plot:
+    # 3D plots of the Metric
     X_plot, Y_plot = np.meshgrid(parasiticResistance, memoryWindow)
     x = X_plot.flatten()
     y = Y_plot.flatten()
@@ -387,56 +403,56 @@ if MSE_plot:
         dx = np.diff(parasiticResistance).min()
     if np.size(memoryWindow) > 1:
         dy = np.diff(memoryWindow).min()
-    max_mse = ((mse.T).flatten()).max()
+    max_Metric = ((Metric.T).flatten()).max()
     num_models = len(enabled_models) - 1  # Exclude the reference model
     # Calculate optimal rows and columns for the subplots
     cols = int(np.ceil(np.sqrt(num_models)))
     rows = int(np.ceil(num_models / cols))
     # Create the subplots grid
-    figure_mse, axs = plt.subplots(rows, cols, subplot_kw={'projection': '3d'}, figsize=(15, 7))
+    figure_Metric, axs = plt.subplots(rows, cols, subplot_kw={'projection': '3d'}, figsize=(15, 7))
     axs = np.array(axs).reshape(-1)  # Flatten to make indexing easier
     plot_index = 0
     for index, model in enumerate(enabled_models):
         if model != reference_model:
-            dz = (mse[:, :, index].T).flatten()
+            dz = (Metric[:, :, index].T).flatten()
             axs[plot_index].bar3d(x, y, np.zeros_like(dz), dx, dy, dz, shade=True, color=colors[plot_index % len(colors)])
             axs[plot_index].set_title(model)
             axs[plot_index].set_xlabel('Parasitic Resistance (Ohm)')
             axs[plot_index].set_ylabel('Memory Window (Ohm)')
             axs[plot_index].set_zlabel(error_label)
-            axs[plot_index].set_zlim(0, max_mse)
+            axs[plot_index].set_zlim(0, max_Metric)
             plot_index += 1
     # Hide any unused subplots
     for ax in axs[plot_index:]:
         ax.set_visible(False)
     plt.tight_layout()
     # Save and show the figure
-    figure_mse.savefig(folder + '/Figure_MSE_plot.png')
+    figure_Metric.savefig(folder + '/Figure_Metric_plot.png')
     plt.show()
 
 
-if Mean_MSE_plot:
-    print("mesn MSE (each model):",np.mean(mse, axis=0).mean(axis=0))
-    # Total Mse histogram
-    fig_mse = plt.figure()
+if Mean_Metric_plot:
+    print("mean Metric (each model):",np.mean(Metric, axis=0).mean(axis=0))
+    # Total Metric histogram
+    fig_Metric = plt.figure()
     # Prepare the data
     # Plot the histogram
-    plt.bar(enabled_models[:-1], np.mean(mse, axis=0).mean(axis=0)[:-1], color=[colors[i % len(colors)] for i in range(len(enabled_models) - 1)])
+    plt.bar(enabled_models[:-1], np.mean(Metric, axis=0).mean(axis=0), color=[colors[i % len(colors)] for i in range(len(enabled_models) - 1)])
     # Add labels and title
     plt.xlabel('Model')
     plt.ylabel(error_label)
-    plt.title('Mean Error (all simulations)\n' + array_size_string)
-    plt.savefig(folder + '/Figure_Mean_MSE_plot.png')
+    plt.title('Mean Score throught all simulations)\n' + array_size_string)
+    plt.savefig(folder + '/Figure_Mean_Metric_plot.png')
     # Show the plot
     plt.show()
 
 
-if MSE_vs_Rpar and memorySize==1:
+if Metric_vs_Rpar and memorySize==1:
     # Plotting
     plt.figure()
     for index, model in enumerate(enabled_models):
         if model != reference_model:
-             plt.plot(parasiticResistance, mse[:, 0, index], marker=markers[index % len(markers)], color=colors[index % len(colors)], label=model)
+             plt.plot(parasiticResistance, Metric[:, 0, index], marker=markers[index % len(markers)], color=colors[index % len(colors)], label=model)
     # Log scale for y-axis as in the example image
     plt.xlabel("Line Resistance (Ω)")
     plt.ylabel(error_label)
@@ -447,12 +463,12 @@ if MSE_vs_Rpar and memorySize==1:
     # Show the plot
     plt.show()
 
-if MSE_vs_MW and parasiticSize==1:
+if Metric_vs_MW and parasiticSize==1:
     # Plotting
     plt.figure()
     for index, model in enumerate(enabled_models):
         if model != reference_model:
-             plt.plot(memoryWindow, mse[0, :, index], marker=markers[index % len(markers)], color=colors[index % len(colors)], label=model)
+             plt.plot(memoryWindow, Metric[0, :, index], marker=markers[index % len(markers)], color=colors[index % len(colors)], label=model)
     # Log scale for y-axis as in the example image
     plt.xlabel("Memory Window (On/Off ratio)")
     plt.ylabel(error_label)
@@ -463,10 +479,12 @@ if MSE_vs_MW and parasiticSize==1:
     # Show the plot
     plt.show()
 
-
 if print_table:
     model_labels = np.array(enabled_models)
-    winning_indices = np.argmin(mse[:,:,:-1], axis=-1)
+    if Metric_type == 2:
+        winning_indices = np.argmax(Metric, axis=-1)
+    else:
+        winning_indices = np.argmin(Metric, axis=-1)
     winning_models = model_labels[winning_indices]
     winning_df = pd.DataFrame(winning_models, index=parasiticResistance, columns=memoryWindow)
     # First save without formatting
@@ -499,53 +517,84 @@ if print_table:
     wb.save(excel_path)
     os.startfile(excel_path)
 
-    
+if Winning_models_map:
+    model_labels = np.array(enabled_models)
+    if Metric_type == 2:
+        winning_indices = np.argmax(Metric, axis=-1)
+    else:
+        winning_indices = np.argmin(Metric, axis=-1)
+    winning_models = model_labels[winning_indices]
+    # Define color mapping using the order of enabled_models
+    hex_colors = [to_hex(color) for color in colors]
+    color_map = {model: hex_colors[i] for i, model in enumerate(enabled_models)}
+    # Map winning models to indices
+    model_to_idx = {model: idx for idx, model in enumerate(enabled_models)}
+    model_indices = np.vectorize(model_to_idx.get)(winning_models)
+    winning_models_unique = [model for model in enabled_models if model in np.unique(winning_models)]
+    filtered_colors = [color_map[model] for model in winning_models_unique]
+    cmap = mcolors.ListedColormap(filtered_colors)
+    # Plot the heatmap
+    plt.figure(figsize=(10, 8))
+    plt.imshow(model_indices, cmap=cmap, origin="lower", aspect="auto",
+                extent=[memoryWindow[0], memoryWindow[-1], parasiticResistance[0], parasiticResistance[-1]],
+                interpolation="nearest")
+    # Add axis labels
+    plt.xlabel("Memory Window")
+    plt.ylabel("Parasitic Resistance")
+    plt.title("Winning Models Map")
+    # Create a legend using enabled_models order
+    legend_patches = [Patch(facecolor=color_map[model], label=model) for model in winning_models_unique]
+    plt.legend(handles=legend_patches, bbox_to_anchor=(1.05, 1), loc="upper left", title="Models")
+    # Show the plot
+    plt.tight_layout()
+    plt.savefig(folder + '/Figure_Winning_Models_Map.png')
+    plt.show()
 
 
 if scatter_plot:
-    mean_mse = np.mean(mse, axis=0).mean(axis=0)
-    variance_mse = np.var(mse, axis=0).mean(axis=0)  # Compute variance
+    mean_Metric = np.mean(Metric, axis=0).mean(axis=0)
+    variance_Metric = np.var(Metric, axis=0).mean(axis=0)  # Compute variance
     if "Ideal" in enabled_models:
         ideal_index = enabled_models.index("Ideal")
-        normalized_simulation_times = simulation_times / simulation_times[ideal_index]
-        plot_models = [model for i, model in enumerate(enabled_models) if i != ideal_index]
+        normalized_simulation_times = simulation_times[:-1] / simulation_times[ideal_index]
+        plot_models = [model for i, model in enumerate(enabled_models[:-1]) if i != ideal_index]
         plot_times = np.delete(normalized_simulation_times, ideal_index)
-        plot_mse = np.delete(mean_mse, ideal_index)
-        plot_variance = np.delete(variance_mse, ideal_index)  # Adjust variance array
+        plot_Metric = np.delete(mean_Metric, ideal_index)
+        plot_variance = np.delete(variance_Metric, ideal_index)  # Adjust variance array
     else:
-        plot_models = enabled_models
-        plot_times = simulation_times
-        plot_mse = mean_mse
-        plot_variance = variance_mse  # Use full variance array
+        plot_models = enabled_models[:-1]
+        plot_times = simulation_times[:-1]
+        plot_Metric = mean_Metric
+        plot_variance = variance_Metric  # Use full variance array
     fig, ax = plt.subplots()
     # Filter data for "CrossSim" models
     crosssim_indices = [i for i, model in enumerate(plot_models) if model.startswith("CrossSim")]
-    if crosssim_indices:
+    if len(crosssim_indices)>1:
         crosssim_times = np.array(plot_times)[crosssim_indices].reshape(-1, 1)
-        crosssim_mse = np.array(plot_mse)[crosssim_indices]
+        crosssim_Metric = np.array(plot_Metric)[crosssim_indices]
         # Fit a linear regression model
-        reg = LinearRegression().fit(np.log(crosssim_times), np.log(crosssim_mse))  # Log scale for both time and mse
+        reg = LinearRegression().fit(np.log(crosssim_times), np.log(crosssim_Metric))  # Log scale for both time and Metric
         reg_line_x = np.linspace(crosssim_times.min(), crosssim_times.max(), 100).reshape(-1, 1)
         reg_line_y = np.exp(reg.predict(np.log(reg_line_x)))  # Convert the predicted log values back to the original scale
         # Plot regression line
         ax.plot(reg_line_x, reg_line_y, color='blue', linestyle='--', linewidth=1.5, label='CrossSim Regression')
-    scatter = ax.scatter(plot_times, plot_mse, 
+    scatter = ax.scatter(plot_times, plot_Metric, 
                         c=[colors[(i+1) % len(colors)] for i in range(len(plot_models))],
                         s=120, marker='o', edgecolor="black", linewidth=0.7)
     # Plot variance bars
-    for i, (x, y, var) in enumerate(zip(plot_times, plot_mse, plot_variance)):
+    for i, (x, y, var) in enumerate(zip(plot_times, plot_Metric, plot_variance)):
         ax.errorbar(x, y, yerr=np.sqrt(var), fmt='o', color=colors[(i+1) % len(colors)], capsize=5)
     for i, model in enumerate(plot_models):
         if not model.startswith("CrossSim"):
             ax.annotate(
-                model, (plot_times[i], plot_mse[i]),
+                model, (plot_times[i], plot_Metric[i]),
                 textcoords="offset points", xytext=(10, 0), ha='left'  # Adjusted position to the right
             )
     ax.grid(True, which="both", linestyle='--', linewidth=0.5, color="gray", alpha=0.7)
     # Highlight Pareto front
     sorted_indices = np.argsort(plot_times)
     pareto_times = np.array(plot_times)[sorted_indices]
-    pareto_mse = np.array(plot_mse)[sorted_indices]
+    pareto_Metric = np.array(plot_Metric)[sorted_indices]
     # Legend Handles
     legend_handles = [
         plt.Line2D([0], [0], marker='o', color='w', label=plot_models[i],
