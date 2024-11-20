@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.patches import Patch
 from matplotlib.colors import to_hex
+from matplotlib.patches import Polygon
+from math import pi
 import time
 import tkinter as tk
 from tkinter import ttk
@@ -249,6 +251,7 @@ Metric_vs_MW = 1
 Winning_models_map = 1
 print_table = 1
 scatter_plot = 1
+spider_plot = 1
 
 Resistance_heatmap =0
 open_folder = 1
@@ -556,9 +559,8 @@ if scatter_plot:
     variance_Metric = np.var(Metric, axis=0).mean(axis=0)  # Compute variance
     if "Ideal" in enabled_models:
         ideal_index = enabled_models.index("Ideal")
-        normalized_simulation_times = simulation_times[:-1] / simulation_times[ideal_index]
         plot_models = [model for i, model in enumerate(enabled_models[:-1]) if i != ideal_index]
-        plot_times = np.delete(normalized_simulation_times, ideal_index)
+        plot_times = np.delete(normalized_simulation_times[:-1], ideal_index)
         plot_Metric = np.delete(mean_Metric, ideal_index)
         plot_variance = np.delete(variance_Metric, ideal_index)  # Adjust variance array
     else:
@@ -614,6 +616,69 @@ if scatter_plot:
     plt.savefig(folder + '/Figure_Scatter_SimulationTimes_vs_error.png')
     plt.show()
 
+
+
+if spider_plot:
+    # Take the mean over the first 2 dimensions for Current_error and Voltage_error
+    current_error_mean = np.mean(Current_error, axis=(0, 1))
+    voltage_error_mean = np.mean(Voltage_error, axis=(0, 1))
+    # Compute the inverse of all metrics (as smaller is better)
+    inverse_current_error = 1 / current_error_mean[:-1]
+    inverse_voltage_error = 1 / voltage_error_mean[:-1]
+    inverse_simulation_times = 1 / simulation_times[:-1]
+    # Handle "Ideal" model
+    if "Ideal" in enabled_models:
+        ideal_index = enabled_models.index("Ideal")
+        # Remove "Ideal" data from metrics
+        inverse_simulation_times = np.delete(inverse_simulation_times, ideal_index)
+        inverse_voltage_error = np.delete(inverse_voltage_error, ideal_index)
+        inverse_current_error = np.delete(inverse_current_error, ideal_index)
+        # Remove "Ideal" from enabled_models
+        enabled_models = [model for i, model in enumerate(enabled_models) if i != ideal_index]
+    # Combine metrics for radar plot
+    metrics = np.vstack([inverse_current_error, inverse_voltage_error, inverse_simulation_times])
+    # Normalize each metric to [0, 1]
+    metrics_min = metrics.min(axis=1, keepdims=True)
+    metrics_max = metrics.max(axis=1, keepdims=True)
+    metrics_scaled = metrics / metrics.max(axis=1, keepdims=True)
+    # Labels and angles for the radar plot
+    labels = ['Current Accuracy', 'Voltage Accuracy', 'Simulation Speed']
+    angles = [n / float(len(labels)) * 2 * pi for n in range(len(labels))]
+    angles += angles[:1]  # Repeat the first angle to close the polygon
+    model_colors = colors[:len(enabled_models)]  # Map colors to models
+    # Radar plot setup
+    fig, ax = plt.subplots(figsize=(10, 10), subplot_kw={'polar': True})
+    ax.spines['polar'].set_visible(False)  # Remove default grid circle
+    ax.set_facecolor('#f9f9f9')  # Light gray background
+    ax.grid(color='gray', linestyle='--', linewidth=0.5, alpha=0.5)  # Faint gridlines
+    ax.set_yticks([])  # Remove radial ticks
+    # Plot for each model
+    for i, (model_name, color) in enumerate(zip(enabled_models[:-1], model_colors[1:])):
+        values = metrics_scaled[:, i].tolist()
+        values += values[:1]  # Repeat the first value to close the polygon
+        ax.plot(angles, values, label=model_name, color=color, linewidth=2)
+        ax.fill(angles, values, color=color, alpha=0.25)
+    # Customize axis labels
+    ax.set_xticks(angles[:-1])
+    ax.set_xticklabels(labels, fontsize=12, fontweight='bold', color='black')
+    # Title
+    ax.set_title("Models Performance Comparison\n"+array_size_string, size=18, pad=30, color='black')
+    # Customize legend
+    ax.legend(
+        loc='upper right',
+        bbox_to_anchor=(1.3, 1.1),
+        fontsize=12,
+        title="Models",
+        title_fontsize=14,
+        frameon=True,
+        fancybox=True,
+        shadow=True,
+        borderpad=1.2,
+        labelspacing=1.2,
+    )
+    plt.tight_layout()
+    plt.savefig(folder + '/Figure_Spider_plot.png')
+    plt.show()
 
 
 
