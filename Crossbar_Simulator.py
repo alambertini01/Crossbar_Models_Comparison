@@ -1,4 +1,4 @@
-import random as rd 
+import random
 import datetime
 import pytz
 import os
@@ -33,6 +33,8 @@ input,output = (32,32)
 # Initialize each model instance
 Models = [
     JeongModel("Jeong"),
+    JeongModel_avg("Jeong_avg"),
+    JeongModel_avgv2("Jeong_avgv2"),
     IdealModel("Ideal"),
     DMRModel("DMR_old"),
     DMRModel_acc("DMR"),
@@ -40,10 +42,11 @@ Models = [
     GammaModel("Gamma_old"),
     GammaModel_acc("Gamma_acc_v1"),
     GammaModel_acc_v2("Gamma"),
-    CrossSimModel_p1("CrossSim"),
-    CrossSimModel_p2("CrossSim2"),
-    CrossSimModel_p3("CrossSim3"),
-    CrossSimModel("CrossSim4"),
+    CrossSimModel("CrossSim_ref"),
+    CrossSimModel("CrossSim1",Verr_th=0.5),
+    CrossSimModel("CrossSim2",Verr_th=1e-1),
+    CrossSimModel("CrossSim3",Verr_th=1e-2),
+    CrossSimModel("CrossSim4",Verr_th=1e-3),
     LTSpiceModel("LTSpice"),
     NgSpiceModel("NgSpice"),
     NgSpiceNonLinearModel("NgSpiceNonLinear"),
@@ -54,33 +57,31 @@ Models = [
 
 # enabled_models = [ "Ideal","DMR_acc","Gamma_acc", "CrossSim","Memtorch_cpp","Memtorch_python","NgSpice"]
 # enabled_models = [model.name for model in Models]
-enabled_models = [ "Ideal","Jeong","DMR","Gamma","CrossSim"]
+enabled_models = [ "Ideal","Jeong","Jeong_avg","Jeong_avgv2","DMR","Gamma","CrossSim1","CrossSim2","CrossSim3","CrossSim4"]
 
-reference_model = "CrossSim3"
+reference_model = "CrossSim_ref"
 
 # Low resistance proggramming value
 R_lrs = 1000
 Rhrs_percentage=50
 # parasitic resistance value
 parasiticResistance = np.arange(0.2, 5, 0.2)
-# parasiticResistance = np.array([2])
+parasiticResistance = np.array([2])
 
 # Memory window (ratio between Hrs and Lrs)
 memoryWindow = np.arange(5, 101, 5)
-# memoryWindow = np.array([20])
+memoryWindow = np.array([20])
 
 # Input voltages parameters
 v_On_percentage = 100
 population = [1, 0.0]
 
 # Metric type (2=Current*Times, 1=Current, 0=Voltage)
-Metric_type = 2
+Metric_type = 1
 
 # Variability parameters
 v_flag = 1
-v_size = 5
-
-
+v_size = 30
 
 
 
@@ -108,23 +109,6 @@ R = np.zeros((np.size(parasiticResistance),memorySize, v_size, input, output))
 X = np.zeros((np.size(parasiticResistance),memorySize, v_size, input, output))
 S = np.ones((np.size(parasiticResistance),memorySize, v_size, input, output))
 
-# Assuming 'input', 'output', and 'v_size' are defined elsewhere
-for m in range(np.size(memoryWindow)):                  # Iterating over memoryWindow
-    x_thickness = resistance_array_to_x(np.array([R_lrs*memoryWindow[m]]))
-    for z in range(np.size(parasiticResistance)):       # Iterating over parasiticResistance
-        for v in range(v_size):                         # iterating over variability 'v'
-            Rstate = np.random.choice([1, 0], size=(input, output), p=[Rhrs_percentage/100, 1 - Rhrs_percentage/100])
-            # Rstate[5,10]=1
-            X[z,m,v] = Rstate*x_thickness+10e-13
-            S[z,m,v] = (1-Rstate)*s + Rstate*s0
-            if v_flag:
-                # barrier thickness variability for non linear case
-                X[z,m,v] += (np.abs(np.random.randn(input,output)*v_dx/3))*Rstate
-                S[z,m,v] += np.random.randn(input,output)*v_ds/3
-                # Calculate the resistance with the variability R[z, m, v]
-                R[z, m, v] = calculate_resistance(X[z,m,v], S[z,m,v])
-            else:
-                R[z,m,v] = Rstate*R_lrs*memoryWindow[m]+(1-Rstate)*R_lrs
 
 # Generate Potential vector
 Potential = np.random.choice(population, size=input, p=[v_On_percentage / 100, 1 - v_On_percentage / 100])
@@ -139,8 +123,8 @@ V_a_matrix = np.tile(Potential, output)
 voltage_drops = np.zeros((input,output, parasiticSize ,memorySize, modelSize))
 
 # Initialize Metric arrays
-Current_error = np.zeros((parasiticSize ,memorySize, modelSize))
-Voltage_error = np.zeros((parasiticSize ,memorySize, modelSize))
+Current_error = np.zeros((parasiticSize ,memorySize, modelSize-1))
+Voltage_error = np.zeros((parasiticSize ,memorySize, modelSize-1))
 
 # Initialize time measurements
 simulation_times = np.zeros(modelSize)
@@ -173,11 +157,11 @@ root.update_idletasks()
 
 
 
-
 ############################ MAIN LOOP ############################
 
 for m in range(memorySize):
     update_progress_bars(memory_progress, resistance_progress, variability_progress, m, 0, 0, memorySize, parasiticResistance, v_size)
+    x_thickness = resistance_array_to_x(np.array([R_lrs*memoryWindow[m]]))
 
     for z in range(np.size(parasiticResistance)):
         update_progress_bars(memory_progress, resistance_progress, variability_progress, m, z, 0, memorySize, parasiticResistance, v_size)
@@ -185,6 +169,21 @@ for m in range(memorySize):
         for v in range(v_size):
             update_progress_bars(memory_progress, resistance_progress, variability_progress, m, z, v, memorySize, parasiticResistance, v_size)
 
+            # Generate Resistance Matrix based on the parameters
+            Rstate = np.random.choice([1, 0], size=(input, output), p=[Rhrs_percentage/100, 1 - Rhrs_percentage/100])
+            # Rstate[5,10]=1
+            X[z,m,v] = Rstate*x_thickness+10e-13
+            S[z,m,v] = (1-Rstate)*s + Rstate*s0
+            if v_flag:
+                # barrier thickness variability for non linear case
+                X[z,m,v] += (np.abs(np.random.randn(input,output)*v_dx/3))*Rstate
+                S[z,m,v] += np.random.randn(input,output)*v_ds/3
+                # Calculate the resistance with the variability R[z, m, v]
+                R[z, m, v] = calculate_resistance(X[z,m,v], S[z,m,v])
+            else:
+                R[z,m,v] = Rstate*R_lrs*memoryWindow[m]+(1-Rstate)*R_lrs
+
+            # Simulate the crossbar with each model
             for index, model in enumerate(Models):
                 if model.name in enabled_models:  # Check if the model is enabled
                     index = enabled_models.index(model.name)
@@ -195,8 +194,9 @@ for m in range(memorySize):
                     # output_currents[:, z, m, index] = np.cumsum(voltage_drops[:,:,z,m, index]*np.reciprocal(R[z,m,v]),axis=0)[input-1,:]
                     end_time = time.perf_counter()
                     simulation_times[index] += (end_time - start_time)/totalIterations
-                    
-            for index, model in enumerate(enabled_models):
+            
+            # Calculate the error metrics
+            for index, model in enumerate(enabled_models[:-1]):
                 # Compute Output Current Metric
                 Current_error[z, m, index] += np.mean(np.abs(output_currents[:, z, m, reference_index] - output_currents[:, z, m, index] ) / output_currents[:, z, m, reference_index])*100/v_size
                 # Compute Voltage Metric
@@ -230,9 +230,27 @@ if "Ideal" in enabled_models:
 
 ###################### Plotting portion ##########################################################################
 
-# plot parameters
-colors = ['g', 'r', 'b', 'm', 'c', 'y', 'orange', 'purple', 'pink', 'brown', 'lime', 'teal']
-colors = ['black','c', 'g', 'r', 'b', 'orange', 'purple', 'pink', 'brown', 'lime', 'teal']
+
+
+# Known color mapping
+color_mapping = {
+    "Jeong": "c",
+    "DMR": "g",
+    "Gamma": "r",
+    "Ng": "pink",
+    "CrossSim": "b",
+    "Ideal": "black",
+    "Memtorch": "orange"
+}
+
+# Generate the colors list
+colors = [
+    color_mapping[next((key for key in color_mapping if model.startswith(key)), None)] 
+    if any(model.startswith(key) for key in color_mapping) 
+    else "#{:06x}".format(random.randint(0, 0xFFFFFF))  # Generate a random color
+    for model in enabled_models
+]
+
 markers = ['o', 's', 'D', '^', 'v', 'p']
 
 # Figures Selection
@@ -278,6 +296,7 @@ else:
     Metric_vs_Rpar=0
     Metric_vs_MW=0
     print_table=0
+    Winning_models_map = 0
 
 # Different labels based on the used metric
 if Metric_type:
@@ -580,12 +599,21 @@ if scatter_plot:
         reg_line_y = np.exp(reg.predict(np.log(reg_line_x)))  # Convert the predicted log values back to the original scale
         # Plot regression line
         ax.plot(reg_line_x, reg_line_y, color='blue', linestyle='--', linewidth=1.5, label='CrossSim Regression')
-    scatter = ax.scatter(plot_times, plot_Metric, 
-                        c=[colors[(i+1) % len(colors)] for i in range(len(plot_models))],
-                        s=120, marker='o', edgecolor="black", linewidth=0.7)
+        scatter = ax.scatter(
+        plot_times, 
+        plot_Metric, 
+        c=[ colors[crosssim_indices[1] % len(colors)] 
+            if i in crosssim_indices else colors[(i+1) % len(colors)] 
+            for i in range(len(plot_models))],
+        s=120, 
+        marker='o', 
+        edgecolor="black", 
+        linewidth=0.7
+    )
     # Plot variance bars
     for i, (x, y, var) in enumerate(zip(plot_times, plot_Metric, plot_variance)):
-        ax.errorbar(x, y, yerr=np.sqrt(var), fmt='o', color=colors[(i+1) % len(colors)], capsize=5)
+        ax.errorbar(x, y, yerr=np.sqrt(var), fmt='o', color=colors[crosssim_indices[1] % len(colors)] 
+            if i in crosssim_indices else colors[(i+1) % len(colors)] , capsize=5)
     for i, model in enumerate(plot_models):
         if not model.startswith("CrossSim"):
             ax.annotate(
@@ -623,8 +651,8 @@ if spider_plot:
     current_error_mean = np.mean(Current_error, axis=(0, 1))
     voltage_error_mean = np.mean(Voltage_error, axis=(0, 1))
     # Compute the inverse of all metrics (as smaller is better)
-    inverse_current_error = 1 / current_error_mean[:-1]
-    inverse_voltage_error = 1 / voltage_error_mean[:-1]
+    inverse_current_error = 1 / current_error_mean
+    inverse_voltage_error = 1 / voltage_error_mean
     inverse_simulation_times = 1 / simulation_times[:-1]
     # Handle "Ideal" model
     if "Ideal" in enabled_models:

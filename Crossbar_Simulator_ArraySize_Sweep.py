@@ -24,10 +24,11 @@ Models = [
     GammaModel("Gamma_old"),
     GammaModel_acc("Gamma_acc_v1"),
     GammaModel_acc_v2("Gamma"),
-    CrossSimModel_p1("CrossSim"),
-    CrossSimModel_p2("CrossSim2"),
-    CrossSimModel_p3("CrossSim3"),
-    CrossSimModel("CrossSim4"),
+    CrossSimModel("CrossSim_ref"),
+    CrossSimModel("CrossSim1",Verr_th=0.5),
+    CrossSimModel("CrossSim2",Verr_th=1e-1),
+    CrossSimModel("CrossSim3",Verr_th=1e-2),
+    CrossSimModel("CrossSim4",Verr_th=1e-3),
     LTSpiceModel("LTSpice"),
     NgSpiceModel("NgSpice"),
     NgSpiceNonLinearModel("NgSpiceNonLinear"),
@@ -38,9 +39,9 @@ Models = [
 
 # enabled_models = [ "Ideal","DMR_acc","Gamma_acc", "CrossSim","Memtorch_cpp","Memtorch_python","NgSpice"]
 # enabled_models = [model.name for model in Models]
-enabled_models = ["Ideal", "Jeong","DMR","Gamma","CrossSim","CrossSim2"]
+enabled_models = ["Ideal", "Jeong","DMR","Gamma","CrossSim1","CrossSim2"]
 
-reference_model = "CrossSim3"
+reference_model = "CrossSim_ref"
 
 # SWEEP PARAMETERS
 
@@ -179,7 +180,25 @@ else:
 ###################### Plotting portion ##########################################################################
 
 # plot parameters
-colors = ['black','c','g', 'r', 'b', 'orange', 'purple', 'pink', 'brown', 'lime', 'teal']
+# Known color mapping
+color_mapping = {
+    "Jeong": "c",
+    "DMR": "g",
+    "Gamma": "r",
+    "Ng": "pink",
+    "CrossSim": "b",
+    "Ideal": "black",
+    "Memtorch": "orange"
+}
+
+# Generate the colors list
+colors = [
+    color_mapping[next((key for key in color_mapping if model.startswith(key)), None)] 
+    if any(model.startswith(key) for key in color_mapping) 
+    else "#{:06x}".format(random.randint(0, 0xFFFFFF))  # Generate a random color
+    for model in enabled_models
+]
+
 markers = ['o', 's', 'D', '^', 'v', 'p']
 
 # Results Folder

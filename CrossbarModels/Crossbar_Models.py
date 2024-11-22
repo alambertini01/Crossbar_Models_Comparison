@@ -35,19 +35,9 @@ class JeongModel(CrossbarModel):
         weights = np.arange(input, 0, -1, dtype=float)
         cumsum_weights = np.cumsum(weights[::-1])[::-1]
         B_jeong = parasiticResistance * cumsum_weights
-
-        # # Calculate Rd_avg (the average resistance)
-        # k = 0.9
-        # R_lrs = np.min(R)
-        # R_hrs = np.max(R)
-        # a = R_lrs**(-k)
-        # b = R_hrs**(-k)
-        # Rd_avg = (a * R_lrs + b * R_hrs) / (a + b)
-        # Rd_avg = np.mean(R)
         
         A_jeong_matrix = np.full((input, output), A_jeong)
         B_jeong_matrix = np.full((input, output), B_jeong)
-        # R_avg_matrix = np.full((input, output), Rd_avg)
         V_a_matrix = np.tile(Potential.reshape(-1, 1), output)
 
         voltage_drops_jeong = (R*(np.reciprocal(A_jeong_matrix+R+B_jeong_matrix.T))) * V_a_matrix
@@ -56,6 +46,69 @@ class JeongModel(CrossbarModel):
         return voltage_drops_jeong, current_jeong
 
 
+class JeongModel_avg(CrossbarModel):
+    def calculate(self, R, parasiticResistance, Potential, **kwargs):
+        
+        input, output = R.shape
+        # Precompute cumulative sums using cumsum
+        weights = np.arange(output, 0, -1, dtype=float)
+        cumsum_weights = np.cumsum(weights)
+        A_jeong = parasiticResistance * cumsum_weights
+
+        # Precompute the weights: same decreasing weights as before
+        weights = np.arange(input, 0, -1, dtype=float)
+        cumsum_weights = np.cumsum(weights[::-1])[::-1]
+        B_jeong = parasiticResistance * cumsum_weights
+
+        # Calculate Rd_avg (the average resistance)
+        k = 0.9
+        R_lrs = np.min(R)
+        R_hrs = np.max(R)
+        a = R_lrs**(-k)
+        b = R_hrs**(-k)
+        Rd_avg = (a * R_lrs + b * R_hrs) / (a + b)
+        
+        A_jeong_matrix = np.full((input, output), A_jeong)
+        B_jeong_matrix = np.full((input, output), B_jeong)
+        R_avg_matrix = np.full((input, output), Rd_avg)
+        V_a_matrix = np.tile(Potential.reshape(-1, 1), output)
+
+        voltage_drops_jeong = (R_avg_matrix*(np.reciprocal(A_jeong_matrix+R_avg_matrix+B_jeong_matrix.T))) * V_a_matrix
+        current_jeong = np.sum(voltage_drops_jeong*np.reciprocal(R_avg_matrix),axis=0)
+        
+        return voltage_drops_jeong, current_jeong
+    
+class JeongModel_avgv2(CrossbarModel):
+    def calculate(self, R, parasiticResistance, Potential, **kwargs):
+        
+        input, output = R.shape
+        # Precompute cumulative sums using cumsum
+        weights = np.arange(output, 0, -1, dtype=float)
+        cumsum_weights = np.cumsum(weights)
+        A_jeong = parasiticResistance * cumsum_weights
+
+        # Precompute the weights: same decreasing weights as before
+        weights = np.arange(input, 0, -1, dtype=float)
+        cumsum_weights = np.cumsum(weights[::-1])[::-1]
+        B_jeong = parasiticResistance * cumsum_weights
+
+        # Calculate Rd_avg (the average resistance)
+        k = 0.9
+        R_lrs = 1000
+        R_hrs = 20000
+        a = R_lrs**(-k)
+        b = R_hrs**(-k)
+        Rd_avg = (a * R_lrs + b * R_hrs) / (a + b)
+        
+        A_jeong_matrix = np.full((input, output), A_jeong)
+        B_jeong_matrix = np.full((input, output), B_jeong)
+        R_avg_matrix = np.full((input, output), Rd_avg)
+        V_a_matrix = np.tile(Potential.reshape(-1, 1), output)
+
+        voltage_drops_jeong = (R_avg_matrix*(np.reciprocal(A_jeong_matrix+R_avg_matrix+B_jeong_matrix.T))) * V_a_matrix
+        current_jeong = np.sum(voltage_drops_jeong*np.reciprocal(R_avg_matrix),axis=0)
+        
+        return voltage_drops_jeong, current_jeong
 
 class DMRModel(CrossbarModel):
     def calculate(self, R, parasiticResistance, Potential, **kwargs):
@@ -346,27 +399,14 @@ class GammaModel_acc_v2(CrossbarModel):
         return  voltage_drops_gamma, current_gamma
 
 
-class CrossSimModel_p1(CrossbarModel):
-    def calculate(self, R, parasiticResistance, Potential, **kwargs):
-        Verr_th = 6e-1
-        hide_convergence_msg=1
-        return CrossSim_Solve(np.reciprocal(R.T),parasiticResistance,Potential,Verr_th,hide_convergence_msg)
-    
-class CrossSimModel_p2(CrossbarModel):
-    def calculate(self, R, parasiticResistance, Potential, **kwargs):
-        Verr_th = 4e-1
-        hide_convergence_msg=1
-        return CrossSim_Solve(np.reciprocal(R.T),parasiticResistance,Potential,Verr_th,hide_convergence_msg)
-    
-class CrossSimModel_p3(CrossbarModel):
-    def calculate(self, R, parasiticResistance, Potential, **kwargs):
-        Verr_th = 5e-3
-        hide_convergence_msg=1
-        return CrossSim_Solve(np.reciprocal(R.T),parasiticResistance,Potential,Verr_th,hide_convergence_msg)
-
 class CrossSimModel(CrossbarModel):
+    def __init__(self, name, Verr_th=2e-4, hide_convergence_msg=False):
+        super().__init__(name)
+        self.Verr_th = Verr_th
+        self.hide_convergence_msg = hide_convergence_msg
+
     def calculate(self, R, parasiticResistance, Potential, **kwargs):
-        return CrossSim_Solve(np.reciprocal(R.T),parasiticResistance,Potential)
+        return CrossSim_Solve(np.reciprocal(R.T),parasiticResistance,Potential,self.Verr_th,self.hide_convergence_msg)
 
 
 
