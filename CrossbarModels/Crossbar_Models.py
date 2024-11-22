@@ -348,18 +348,21 @@ class GammaModel_acc_v2(CrossbarModel):
 
 class CrossSimModel_p1(CrossbarModel):
     def calculate(self, R, parasiticResistance, Potential, **kwargs):
-        Verr_th = 5e-1
-        return CrossSim_Solve(np.reciprocal(R.T),parasiticResistance,Potential,Verr_th)
+        Verr_th = 6e-1
+        hide_convergence_msg=1
+        return CrossSim_Solve(np.reciprocal(R.T),parasiticResistance,Potential,Verr_th,hide_convergence_msg)
     
 class CrossSimModel_p2(CrossbarModel):
     def calculate(self, R, parasiticResistance, Potential, **kwargs):
-        Verr_th = 5e-2
-        return CrossSim_Solve(np.reciprocal(R.T),parasiticResistance,Potential,Verr_th)
+        Verr_th = 4e-1
+        hide_convergence_msg=1
+        return CrossSim_Solve(np.reciprocal(R.T),parasiticResistance,Potential,Verr_th,hide_convergence_msg)
     
 class CrossSimModel_p3(CrossbarModel):
     def calculate(self, R, parasiticResistance, Potential, **kwargs):
         Verr_th = 5e-3
-        return CrossSim_Solve(np.reciprocal(R.T),parasiticResistance,Potential,Verr_th)
+        hide_convergence_msg=1
+        return CrossSim_Solve(np.reciprocal(R.T),parasiticResistance,Potential,Verr_th,hide_convergence_msg)
 
 class CrossSimModel(CrossbarModel):
     def calculate(self, R, parasiticResistance, Potential, **kwargs):

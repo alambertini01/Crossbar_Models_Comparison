@@ -38,57 +38,50 @@ Models = [
 
 # enabled_models = [ "Ideal","DMR_acc","Gamma_acc", "CrossSim","Memtorch_cpp","Memtorch_python","NgSpice"]
 # enabled_models = [model.name for model in Models]
-enabled_models = ["Ideal", "Jeong","DMR","Gamma","CrossSim"]
+enabled_models = ["Ideal", "Jeong","DMR","Gamma","CrossSim","CrossSim2"]
 
 reference_model = "CrossSim3"
 
+# SWEEP PARAMETERS
 
 # Dimensions of the crossbar
-array_size = np.arange(8,65,4)
-
-Rhrs_percentage=np.arange(0,100,10)
-
+array_size = np.arange(24,129,8)
+# Sparsity of the matrix
+Rhrs_percentage=np.arange(50,51,5)
 # parasitic resistance value
-parasiticResistance = np.arange(0.1, 5, 0.2)
-# parasiticResistance = np.array([2])
-
+parasiticResistance = np.arange(0.1, 3, 0.2)
 # Memory window (ratio between Hrs and Lrs)
-memoryWindow = np.arange(10, 100.1, 10)
-# memoryWindow = np.array([20])
-
-variabilitySize = 10
-
+memoryWindow = np.arange(10, 100.1, 20)
+# Number of different varaibility instances
+variabilitySize = 5
 
 
+# Flag to enable/disable the visualization of the first model
+show_first_model = False
 # Low resistance proggramming value
 R_lrs = 1000
-
 # Input voltages parameters
 v_On_percentage = 100
 population = [1, 0.0]
-
 # Metric type (1=Current, 0=Voltage)
 current_Metric = 1
-
 # Variability parameters
 v_flag = 0
-
 
 enabled_models.append(reference_model)
 modelSize = len(enabled_models)
 # Initialize time measurements
 simulation_times = np.zeros((modelSize,np.size(array_size)))
 
-
-
 memorySize = np.size(memoryWindow)
 parasiticSize = np.size(parasiticResistance)
 sparsitySize = np.size(Rhrs_percentage)
-# Initialize Metric array
+# Initialize Metric arrays
 Current_error = np.zeros((np.size(array_size),parasiticSize ,memorySize, variabilitySize, sparsitySize, modelSize))
 Voltage_error = np.zeros((np.size(array_size),parasiticSize ,memorySize, variabilitySize, sparsitySize, modelSize))
-
-
+# Initialize Metric variances arrays
+Current_error_variance = np.zeros((np.size(array_size),parasiticSize ,memorySize, variabilitySize, sparsitySize, modelSize))
+Voltage_error_variance = np.zeros((np.size(array_size),parasiticSize ,memorySize, variabilitySize, sparsitySize, modelSize))
 
 for d in range(np.size(array_size)):
 
@@ -96,9 +89,7 @@ for d in range(np.size(array_size)):
 
     ############################ INITIALIZATIONS ############################
 
-
     totalIterations = memorySize*parasiticSize*modelSize
-
 
     # Tech 4 parameters
     rho=3000
@@ -113,25 +104,6 @@ for d in range(np.size(array_size)):
     X = np.zeros((np.size(parasiticResistance),memorySize, variabilitySize, sparsitySize, input, output))
     S = np.ones((np.size(parasiticResistance),memorySize, variabilitySize, sparsitySize, input, output))
 
-    # Assuming 'input', 'output', and 'variabilitySize' are defined elsewhere
-    for m in range(np.size(memoryWindow)):                  # Iterating over memoryWindow
-        x_thickness = resistance_array_to_x(np.array([R_lrs*memoryWindow[m]]))
-        for z in range(np.size(parasiticResistance)):       # Iterating over parasiticResistance
-            for v in range(variabilitySize):                         # iterating over variability 'v'
-                for r in range(sparsitySize):
-                    Rstate = np.random.choice([1, 0], size=(input, output), p=[Rhrs_percentage[r]/100, 1 - Rhrs_percentage[r]/100])
-                    # Rstate[5,10]=1
-                    X[z,m,v,r] = Rstate*x_thickness+10e-13
-                    S[z,m,v,r] = (1-Rstate)*s + Rstate*s0
-                    if v_flag:
-                        # barrier thickness variability for non linear case
-                        X[z,m,v,r] += (np.abs(np.random.randn(input,output)*v_dx/3))*Rstate
-                        S[z,m,v,r] += np.random.randn(input,output)*v_ds/3
-                        # Calculate the resistance with the variability R[z, m, v]
-                        R[z, m, v,r] = calculate_resistance(X[z,m,v,r], S[z,m,v,r])
-                    else:
-                        R[z,m,v,r] = Rstate*R_lrs*memoryWindow[m]+(1-Rstate)*R_lrs
-
     # Generate Potential vector
     Potential = np.random.choice(population, size=input, p=[v_On_percentage / 100, 1 - v_On_percentage / 100])
 
@@ -139,7 +111,6 @@ for d in range(np.size(array_size)):
 
     # Output Currents (for each Parasitic Model)
     output_currents = np.zeros((output, parasiticSize ,memorySize, modelSize))
-
 
     # Voltage Drops (for each Parasitic Model)
     V_a_matrix = np.tile(Potential, output)
@@ -152,9 +123,24 @@ for d in range(np.size(array_size)):
     ############################ MAIN LOOP ############################
 
     for m in range(memorySize):
+        x_thickness = resistance_array_to_x(np.array([R_lrs*memoryWindow[m]]))
         for z in range(np.size(parasiticResistance)):
             for v in range(variabilitySize):
                 for r in range(sparsitySize):
+
+                    # Generate Resistance Matrix based on the parameters
+                    Rstate = np.random.choice([1, 0], size=(input, output), p=[Rhrs_percentage[r]/100, 1 - Rhrs_percentage[r]/100])
+                    X[z,m,v,r] = Rstate*x_thickness+10e-13
+                    S[z,m,v,r] = (1-Rstate)*s + Rstate*s0
+                    if v_flag:
+                        # barrier thickness variability for non linear case
+                        X[z,m,v,r] += (np.abs(np.random.randn(input,output)*v_dx/3))*Rstate
+                        S[z,m,v,r] += np.random.randn(input,output)*v_ds/3
+                        # Calculate the resistance with the variability R[z, m, v]
+                        R[z, m, v,r] = calculate_resistance(X[z,m,v,r], S[z,m,v,r])
+                    else:
+                        R[z,m,v,r] = Rstate*R_lrs*memoryWindow[m]+(1-Rstate)*R_lrs
+
                     for index, model in enumerate(Models):
                         if model.name in enabled_models:  # Check if the model is enabled
                             index = enabled_models.index(model.name)
@@ -171,14 +157,21 @@ for d in range(np.size(array_size)):
                         Current_error[d, z, m, v, r, index] = np.mean(np.abs(output_currents[:, z, m, reference_index] - output_currents[:, z, m, index] ) / output_currents[:, z, m, reference_index])*100
                         # Compute Voltage Metric
                         Voltage_error[d, z, m, v, r, index] = np.mean(np.abs((voltage_drops[:,:,z,m,reference_index] - voltage_drops[:,:,z,m,index]))/voltage_drops[:,:,z,m,reference_index])*100
+                        # Compute Output Current Metric variance
+                        Current_error_variance[d, z, m, v, r, index] = np.std(np.abs(output_currents[:, z, m, reference_index] - output_currents[:, z, m, index] ) / output_currents[:, z, m, reference_index])*100
+                        # Compute Voltage Metric variance
+                        Voltage_error_variance[d, z, m, v, r, index] = np.std(np.abs((voltage_drops[:,:,z,m,reference_index] - voltage_drops[:,:,z,m,index]))/voltage_drops[:,:,z,m,reference_index])*100
+
 
 
 # Different labels based on the used metric
 if current_Metric:
     Metric = Current_error
+    Metric_variance = Current_error_variance
     error_label = "Normalized Output Current Error (%)"
 else:
     Metric = Voltage_error
+    Metric_variance = Voltage_error_variance
     error_label = "Normalized Voltage Drops Error (%)"
 
 
@@ -200,7 +193,6 @@ normalized_simulation_times =np.zeros_like(simulation_times)
 ideal_index = enabled_models.index("Ideal")
 plot_models = [model for i, model in enumerate(enabled_models) if i != ideal_index]
 
-
 # Plotting
 plt.figure()
 for index, model in enumerate(plot_models):
@@ -220,23 +212,6 @@ plt.savefig(folder+'/Figure_SimulationTimes_vs_ArraySize.png')
 plt.show()
 
 
-# # Plotting
-# plt.figure()
-# for index, model in enumerate(enabled_models):
-#     if model != reference_model:
-#         np.mean(Metric, axis=(0, 1, 3, 3 ,4))[:,index]
-#         plt.plot(array_size, np.mean(Metric, axis=( 1, 3, 3 ,4))[:,index], marker=markers[index % len(markers)], color=colors[index % len(colors)], label=model)
-# # Log scale for y-axis as in the example image
-# plt.yscale('log')
-# plt.xlabel("Array Size")
-# plt.ylabel(error_label)
-# plt.title(error_label+" vs Array Size")
-# plt.legend()
-# plt.grid(True, which="both", linestyle='--', linewidth=0.5)
-# plt.savefig(folder+'/Figure_Error_vs_ArraySize.png')
-# # Show the plot
-# plt.show()
-
 
 sum_simulation_times = np.sum(simulation_times,axis=1)
 # Take the mean over the first 2 dimensions for Current_error and Voltage_error
@@ -251,6 +226,7 @@ robustness_metrics = {
     'Variability Robustness': np.reciprocal(np.mean(np.std(Metric, axis=3), axis=(0,1,2,3))[:-1]),
     'Sparsity Robustness': np.reciprocal(np.mean(np.std(Metric, axis=4), axis=(0,1,2,3))[:-1])
 }
+print(robustness_metrics)
 # Prepare base metrics
 base_metrics = {
     'Current Accuracy': 1 / current_error_mean[:-1],
@@ -264,7 +240,10 @@ valid_metrics = {k: v for k, v in all_metrics.items() if np.all(np.isfinite(v))}
 labels = list(valid_metrics.keys())
 metrics = np.array(list(valid_metrics.values()))
 # Normalize metrics to [0, 1]
-metrics_scaled = metrics / metrics.max(axis=1, keepdims=True)
+if show_first_model:
+    metrics_scaled = metrics / metrics.max(axis=1, keepdims=True)
+else:
+    metrics_scaled = metrics / metrics[:, 1:].max(axis=1, keepdims=True)
 # Compute angles
 angles = [n / float(len(labels)) * 2 * np.pi for n in range(len(labels))]
 angles += angles[:1]  # Repeat the first angle to close the polygon
@@ -278,6 +257,8 @@ ax.set_yticks([])
 model_colors = colors[:len(enabled_models)]
 # Plot for each model
 for i, (model_name, color) in enumerate(zip(enabled_models[:-1], model_colors)):
+    if i == 0 and not show_first_model:
+        continue  # Skip the first model if the flag is disabled
     values = metrics_scaled[:, i].tolist()
     values += values[:1]  # Repeat the first value to close the polygon
     ax.plot(angles, values, label=model_name, color=color, linewidth=2)
@@ -304,24 +285,35 @@ plt.savefig(folder + '/Figure_Spider_plot.png')
 plt.show()
 
 
-
 # Define the data and labels
 data_types = ['array_size', 'parasiticResistance', 'memoryWindow', 'variability', 'sparsity']
 data = [array_size, parasiticResistance, memoryWindow, np.arange(variabilitySize), Rhrs_percentage]
 labels = ['Array Size', 'Parasitic Resistance', 'Memory Window', 'Variability Index', 'Hrs Percentage']
 error_labels = [error_label] * len(data_types)
 markers = ['o', 's', 'D', '^', 'v', 'p']  # List of markers for each model
-
 # Loop through data and create individual figures for each
 for i, (data_type, data_values, label, error_label) in enumerate(zip(data_types, data, labels, error_labels)):
     if len(data_values) > 1:
-        # Compute the error for this data type
+        # Compute the mean error and variance for this data type
         error_vs_data = np.mean(Metric, axis=tuple([j for j in range(5) if j != i]))
+        variance_vs_data = np.mean(Metric_variance, axis=tuple([j for j in range(5) if j != i]))
         # Create a new figure
         fig, ax = plt.subplots(figsize=(12, 7))
-        # Plot each model's error
+        # Plot each model's error with variance
         for j, (model_name, color, marker) in enumerate(zip(enabled_models[:-1], model_colors, markers)):
-            ax.plot(data_values, error_vs_data[:, j], label=model_name, color=color, marker=marker, markersize=8)
+            if j == 0 and not show_first_model:
+                continue  # Skip the first model if the flag is disabled
+            ax.errorbar(
+                data_values, 
+                error_vs_data[:, j], 
+                yerr=np.sqrt(variance_vs_data[:, j]),  # Standard deviation as error bars
+                label=model_name, 
+                color=color, 
+                marker=marker, 
+                markersize=8, 
+                capsize=5,  # Add caps to the error bars
+                linestyle='-'
+            )
         # Customize the plot
         ax.set_xlabel(label, fontsize=14)
         ax.set_ylabel(error_label, fontsize=14)
@@ -334,3 +326,4 @@ for i, (data_type, data_values, label, error_label) in enumerate(zip(data_types,
         plt.savefig(f"{folder}/Figure_error_vs_{data_type}.png", dpi=300)
         # Show the plot
         plt.show()
+

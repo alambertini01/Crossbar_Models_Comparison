@@ -19,7 +19,8 @@ def CrossSim_Solve(
     matrix,
     parasiticResistance,
     vector,
-    Verr_th = 2e-5
+    Verr_th = 2e-5,
+    hide_convergence_msg=0
 ):
     """Wrapper that is used to implement a convergence loop around the circuit solver.
 
@@ -32,7 +33,6 @@ def CrossSim_Solve(
     solved, retry = False, False
     input,output = xp.shape(matrix)
     gamma = min(0.9,50/(input+output)/parasiticResistance)
-    hide_convergence_msg=0
 
     while not solved:
         solved = True
