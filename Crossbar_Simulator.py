@@ -187,7 +187,7 @@ for m in range(memorySize):
             for index, model in enumerate(Models):
                 if model.name in enabled_models:  # Check if the model is enabled
                     index = enabled_models.index(model.name)
-                    NonLinear_params = {'X': X[z,m,v], 'S': S[z,m,v]} if model.name == 'NgSpiceNonLinear' else {}
+                    NonLinear_params = {'X': X[z,m,v], 'S': S[z,m,v]} if model.name == 'NgSpiceNonLinear' else {'R_lrs': R_lrs, 'MW':memoryWindow[m]}
 
                     start_time = time.perf_counter()
                     voltage_drops[:, :, z, m, index], output_currents[:, z, m, index] = model.calculate(R[z, m, v], parasiticResistance[z], Potential, **NonLinear_params)

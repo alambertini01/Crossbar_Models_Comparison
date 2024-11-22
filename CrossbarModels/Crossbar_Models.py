@@ -79,7 +79,7 @@ class JeongModel_avg(CrossbarModel):
         return voltage_drops_jeong, current_jeong
     
 class JeongModel_avgv2(CrossbarModel):
-    def calculate(self, R, parasiticResistance, Potential, **kwargs):
+    def calculate(self, R, parasiticResistance, Potential, R_lrs, MW,**kwargs):
         
         input, output = R.shape
         # Precompute cumulative sums using cumsum
@@ -94,8 +94,7 @@ class JeongModel_avgv2(CrossbarModel):
 
         # Calculate Rd_avg (the average resistance)
         k = 0.9
-        R_lrs = 1000
-        R_hrs = 20000
+        R_hrs = R_lrs*MW
         a = R_lrs**(-k)
         b = R_hrs**(-k)
         Rd_avg = (a * R_lrs + b * R_hrs) / (a + b)
