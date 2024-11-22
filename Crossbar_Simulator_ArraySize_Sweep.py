@@ -42,7 +42,7 @@ Models = [
 # enabled_models = [model.name for model in Models]
 enabled_models = ["Ideal", "Jeong","DMR","Gamma","CrossSim1","CrossSim2"]
 
-reference_model = "CrossSim_ref"
+reference_model = "CrossSim4"
 
 # SWEEP PARAMETERS
 
