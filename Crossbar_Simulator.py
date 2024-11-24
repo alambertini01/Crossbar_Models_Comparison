@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from matplotlib.patches import Patch
 from matplotlib.colors import to_hex
-from matplotlib.patches import Polygon
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from math import pi
 import time
 import tkinter as tk
@@ -57,9 +57,9 @@ Models = [
 
 # enabled_models = [ "Ideal","DMR_acc","Gamma_acc", "CrossSim","Memtorch_cpp","Memtorch_python","NgSpice"]
 # enabled_models = [model.name for model in Models]
-enabled_models = [ "Ideal","Jeong","Jeong_avg","Jeong_avgv2","DMR","Gamma","CrossSim1","CrossSim2","CrossSim3","CrossSim4"]
+enabled_models = [ "Ideal","Jeong","Jeong_avg","Jeong_avgv2","DMR","Gamma","CrossSim1","CrossSim2","CrossSim3","CrossSim4","CrossSim_ref","Memtorch","NgSpice"]
 
-reference_model = "CrossSim_ref"
+reference_model = "LTSpice"
 
 # Low resistance proggramming value
 R_lrs = 1000
@@ -81,7 +81,7 @@ Metric_type = 1
 
 # Variability parameters
 v_flag = 1
-v_size = 30
+v_size = 10
 
 
 
@@ -573,6 +573,7 @@ if Winning_models_map:
     plt.show()
 
 
+
 if scatter_plot:
     mean_Metric = np.mean(Metric, axis=0).mean(axis=0)
     variance_Metric = np.var(Metric, axis=0).mean(axis=0)  # Compute variance
@@ -587,10 +588,12 @@ if scatter_plot:
         plot_times = simulation_times[:-1]
         plot_Metric = mean_Metric
         plot_variance = variance_Metric  # Use full variance array
+
     fig, ax = plt.subplots()
+
     # Filter data for "CrossSim" models
     crosssim_indices = [i for i, model in enumerate(plot_models) if model.startswith("CrossSim")]
-    if len(crosssim_indices)>1:
+    if len(crosssim_indices) > 1:
         crosssim_times = np.array(plot_times)[crosssim_indices].reshape(-1, 1)
         crosssim_Metric = np.array(plot_Metric)[crosssim_indices]
         # Fit a linear regression model
@@ -599,51 +602,77 @@ if scatter_plot:
         reg_line_y = np.exp(reg.predict(np.log(reg_line_x)))  # Convert the predicted log values back to the original scale
         # Plot regression line
         ax.plot(reg_line_x, reg_line_y, color='blue', linestyle='--', linewidth=1.5, label='CrossSim Regression')
-        scatter = ax.scatter(
-        plot_times, 
-        plot_Metric, 
-        c=[ colors[crosssim_indices[1] % len(colors)] 
-            if i in crosssim_indices else colors[(i+1) % len(colors)] 
-            for i in range(len(plot_models))],
-        s=120, 
-        marker='o', 
-        edgecolor="black", 
+
+    scatter = ax.scatter(
+        plot_times,
+        plot_Metric,
+        c=[colors[crosssim_indices[1] % len(colors)] if i in crosssim_indices else colors[(i + 1) % len(colors)]
+           for i in range(len(plot_models))],
+        s=120,
+        marker='o',
+        edgecolor="black",
         linewidth=0.7
     )
+
     # Plot variance bars
     for i, (x, y, var) in enumerate(zip(plot_times, plot_Metric, plot_variance)):
-        ax.errorbar(x, y, yerr=np.sqrt(var), fmt='o', color=colors[crosssim_indices[1] % len(colors)] 
-            if i in crosssim_indices else colors[(i+1) % len(colors)] , capsize=5)
+        ax.errorbar(x, y, yerr=np.sqrt(var), fmt='o',
+                    color=colors[crosssim_indices[1] % len(colors)] if i in crosssim_indices else colors[(i + 1) % len(colors)], capsize=5)
+
+    # Annotate non-CrossSim models
     for i, model in enumerate(plot_models):
         if not model.startswith("CrossSim"):
             ax.annotate(
                 model, (plot_times[i], plot_Metric[i]),
-                textcoords="offset points", xytext=(10, 0), ha='left'  # Adjusted position to the right
+                textcoords="offset points", xytext=(10, 0), ha='left'
             )
+
     ax.grid(True, which="both", linestyle='--', linewidth=0.5, color="gray", alpha=0.7)
+
     # Highlight Pareto front
     sorted_indices = np.argsort(plot_times)
     pareto_times = np.array(plot_times)[sorted_indices]
     pareto_Metric = np.array(plot_Metric)[sorted_indices]
+
     # Legend Handles
     legend_handles = [
         plt.Line2D([0], [0], marker='o', color='w', label=plot_models[i],
-                markerfacecolor=colors[(i+1) % len(colors)], markersize=10)
+                   markerfacecolor=colors[(i + 1) % len(colors)], markersize=10)
         for i in range(len(plot_models)) if i not in crosssim_indices
     ]
     # Add regression line to the legend
     legend_handles.append(plt.Line2D([0], [0], color='blue', linestyle='--', label='CrossSim'))
     ax.legend(handles=legend_handles, title="Models", bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
+
     # Set log scale for x-axis (simulation time)
     ax.set_xscale('log')
     ax.set_xlabel('Normalized Simulation Time (log scale)' if "Ideal" in enabled_models else 'Execution Time (seconds, log scale)')
     ax.set_ylabel(error_label)
-    ax.set_title('Scatter Plot'+'\n'+array_size_string)
+    ax.set_title('Scatter Plot' + '\n' + array_size_string)
+
+    # Add Inset for low-error models
+    inset_ax = inset_axes(ax, width="40%", height="40%", loc='upper right')
+    threshold = 0.1  # Adjust as needed for "low-error" models
+    low_error_indices = [i for i, metric in enumerate(plot_Metric) if metric < threshold]
+    inset_times = np.array(plot_times)[low_error_indices]
+    inset_metrics = np.array(plot_Metric)[low_error_indices]
+    inset_variance = np.array(plot_variance)[low_error_indices]
+
+    inset_ax.scatter(inset_times, inset_metrics, c=[colors[(i + 1) % len(colors)] for i in low_error_indices],
+                     s=60, marker='o', edgecolor="black", linewidth=0.7)
+    for i, (x, y, var) in enumerate(zip(inset_times, inset_metrics, inset_variance)):
+        inset_ax.errorbar(x, y, yerr=np.sqrt(var), fmt='o', color=colors[(low_error_indices[i] + 1) % len(colors)], capsize=3)
+
+    inset_ax.set_xscale('log')
+    inset_ax.set_yscale('log')
+    inset_ax.grid(True, which="both", linestyle='--', linewidth=0.5, alpha=0.7)
+    inset_ax.set_title("Zoom on Low-Error Models", fontsize=10)
+    inset_ax.tick_params(axis='both', which='major', labelsize=8)
+
     # Save and show the plot
     plt.tight_layout()
-    plt.savefig(folder + '/Figure_Scatter_SimulationTimes_vs_error.png')
+    plt.savefig(folder + '/Figure_Scatter_SimulationTimes_vs_error_with_inset.png')
     plt.show()
-
 
 
 if spider_plot:

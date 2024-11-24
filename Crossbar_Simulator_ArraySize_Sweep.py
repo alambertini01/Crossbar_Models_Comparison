@@ -18,6 +18,8 @@ from CrossbarModels.Crossbar_Models import *
 # Initialize each model instance
 Models = [
     JeongModel("Jeong"),
+    JeongModel_avg("Jeong_avg"),
+    JeongModel_avgv2("Jeong_avgv2"),
     IdealModel("Ideal"),
     DMRModel("DMR_old"),
     DMRModel_acc("DMR"),
@@ -40,14 +42,14 @@ Models = [
 
 # enabled_models = [ "Ideal","DMR_acc","Gamma_acc", "CrossSim","Memtorch_cpp","Memtorch_python","NgSpice"]
 # enabled_models = [model.name for model in Models]
-enabled_models = ["Ideal", "Jeong","DMR","Gamma","CrossSim1","CrossSim2"]
+enabled_models = ["Ideal", "Jeong","Jeong_avg","Jeong_avgv2","DMR","Gamma","CrossSim1","CrossSim2"]
 
 reference_model = "CrossSim4"
 
 # SWEEP PARAMETERS
 
 # Dimensions of the crossbar
-array_size = np.arange(24,129,8)
+array_size = np.arange(24,170,8)
 # Sparsity of the matrix
 Rhrs_percentage=np.arange(50,51,5)
 # parasitic resistance value
@@ -273,6 +275,12 @@ ax.spines['polar'].set_visible(False)
 ax.set_facecolor('#f9f9f9')
 ax.grid(color='gray', linestyle='--', linewidth=0.5, alpha=0.5)
 ax.set_yticks([])
+# Add polar grid
+ax.set_rgrids([0.2, 0.4, 0.6, 0.8, 1.0], 
+              labels=['0.2', '0.4', '0.6', '0.8', '1.0'],
+              angle=0,
+              color='gray',
+              alpha=0.2)
 # Map colors to models
 model_colors = colors[:len(enabled_models)]
 # Plot for each model
