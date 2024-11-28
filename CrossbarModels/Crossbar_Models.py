@@ -35,13 +35,14 @@ class JeongModel(CrossbarModel):
         weights = np.arange(input, 0, -1, dtype=float)
         cumsum_weights = np.cumsum(weights[::-1])[::-1]
         B_jeong = parasiticResistance * cumsum_weights
-        
-        A_jeong_matrix = np.full((input, output), A_jeong)
-        B_jeong_matrix = np.full((input, output), B_jeong)
+
+        A_jeong_matrix = np.tile(A_jeong, (input, 1))  # Repeat A_jeong across rows (input axis)
+        B_jeong_matrix = np.tile(B_jeong.reshape(-1, 1), (1, output))  # Repeat B_jeong across columns (output axis)
+
         V_a_matrix = np.tile(Potential.reshape(-1, 1), output)
 
-        voltage_drops_jeong = (R*(np.reciprocal(A_jeong_matrix+R+B_jeong_matrix.T))) * V_a_matrix
-        current_jeong = Potential @ (np.reciprocal(A_jeong_matrix+R+B_jeong_matrix.T))
+        voltage_drops_jeong = (R*(np.reciprocal(A_jeong_matrix+R+B_jeong_matrix))) * V_a_matrix
+        current_jeong = Potential @ (np.reciprocal(A_jeong_matrix+R+B_jeong_matrix))
         
         return voltage_drops_jeong, current_jeong
 
@@ -67,12 +68,12 @@ class JeongModel_avg(CrossbarModel):
         b = R_hrs**(-k)
         Rd_avg = (a * R_lrs + b * R_hrs) / (a + b)
         
-        A_jeong_matrix = np.full((input, output), A_jeong)
-        B_jeong_matrix = np.full((input, output), B_jeong)
+        A_jeong_matrix = np.tile(A_jeong, (input, 1))  # Repeat A_jeong across rows (input axis)
+        B_jeong_matrix = np.tile(B_jeong.reshape(-1, 1), (1, output))  # Repeat B_jeong across columns (output axis)
         R_avg_matrix = np.full((input, output), Rd_avg)
         V_a_matrix = np.tile(Potential.reshape(-1, 1), output)
 
-        voltage_drops_jeong = (R_avg_matrix*(np.reciprocal(A_jeong_matrix+R_avg_matrix+B_jeong_matrix.T))) * V_a_matrix
+        voltage_drops_jeong = (R_avg_matrix*(np.reciprocal(A_jeong_matrix+R_avg_matrix+B_jeong_matrix))) * V_a_matrix
         current_jeong = np.sum(voltage_drops_jeong*np.reciprocal(R_avg_matrix),axis=0)
         
         return voltage_drops_jeong, current_jeong
@@ -98,12 +99,12 @@ class JeongModel_avgv2(CrossbarModel):
         b = R_hrs**(-k)
         Rd_avg = (a * R_lrs + b * R_hrs) / (a + b)
         
-        A_jeong_matrix = np.full((input, output), A_jeong)
-        B_jeong_matrix = np.full((input, output), B_jeong)
+        A_jeong_matrix = np.tile(A_jeong, (input, 1))  # Repeat A_jeong across rows (input axis)
+        B_jeong_matrix = np.tile(B_jeong.reshape(-1, 1), (1, output))  # Repeat B_jeong across columns (output axis)
         R_avg_matrix = np.full((input, output), Rd_avg)
         V_a_matrix = np.tile(Potential.reshape(-1, 1), output)
 
-        voltage_drops_jeong = (R_avg_matrix*(np.reciprocal(A_jeong_matrix+R_avg_matrix+B_jeong_matrix.T))) * V_a_matrix
+        voltage_drops_jeong = (R_avg_matrix*(np.reciprocal(A_jeong_matrix+R_avg_matrix+B_jeong_matrix))) * V_a_matrix
         current_jeong = np.sum(voltage_drops_jeong*np.reciprocal(R_avg_matrix),axis=0)
         
         return voltage_drops_jeong, current_jeong

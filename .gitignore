@@ -5,6 +5,7 @@ build/
 backups/
 LTSpice/
 Results/
+data/
 .vscode/
 env/
 .venv/

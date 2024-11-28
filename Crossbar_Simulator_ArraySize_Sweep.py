@@ -17,9 +17,9 @@ from CrossbarModels.Crossbar_Models import *
 
 # Initialize each model instance
 Models = [
-    JeongModel("Jeong"),
+    JeongModel("Jeong_OLD"),
     JeongModel_avg("Jeong_avg"),
-    JeongModel_avgv2("Jeong_avgv2"),
+    JeongModel_avgv2("Jeong"),
     IdealModel("Ideal"),
     DMRModel("DMR_old"),
     DMRModel_acc("DMR"),
@@ -28,7 +28,7 @@ Models = [
     GammaModel_acc("Gamma_acc_v1"),
     GammaModel_acc_v2("Gamma"),
     CrossSimModel("CrossSim_ref"),
-    CrossSimModel("CrossSim1",Verr_th=0.5),
+    CrossSimModel("CrossSim",Verr_th=0.3,hide_convergence_msg=True),
     CrossSimModel("CrossSim2",Verr_th=1e-1),
     CrossSimModel("CrossSim3",Verr_th=1e-2),
     CrossSimModel("CrossSim4",Verr_th=1e-3),
@@ -42,18 +42,18 @@ Models = [
 
 # enabled_models = [ "Ideal","DMR_acc","Gamma_acc", "CrossSim","Memtorch_cpp","Memtorch_python","NgSpice"]
 # enabled_models = [model.name for model in Models]
-enabled_models = ["Ideal", "Jeong","Jeong_avg","Jeong_avgv2","DMR","Gamma","CrossSim1","CrossSim2"]
+enabled_models = ["Ideal", "Jeong","DMR","Gamma","CrossSim"]
 
 reference_model = "CrossSim4"
 
 # SWEEP PARAMETERS
 
 # Dimensions of the crossbar
-array_size = np.arange(24,170,8)
+array_size = np.arange(24,100,16)
 # Sparsity of the matrix
-Rhrs_percentage=np.arange(50,51,5)
+Rhrs_percentage=np.arange(20,81,20)
 # parasitic resistance value
-parasiticResistance = np.arange(0.1, 3, 0.2)
+parasiticResistance = np.arange(0.1, 3, 0.3)
 # Memory window (ratio between Hrs and Lrs)
 memoryWindow = np.arange(10, 100.1, 20)
 # Number of different varaibility instances

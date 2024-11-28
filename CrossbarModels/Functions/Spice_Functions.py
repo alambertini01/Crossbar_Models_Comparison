@@ -5,7 +5,7 @@ from PyLTSpice import SimCommander
 from PyLTSpice import RawRead
 
 def Create_Structure(net_name, Potential, R, input, output, parasiticResistance):
-    r_sampling = 0.000001
+    r_sampling = 0.00000000001
 
     with open(net_name,'w', encoding= 'UTF-8') as f:
         

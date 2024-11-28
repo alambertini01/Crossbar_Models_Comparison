@@ -28,13 +28,13 @@ from CrossbarModels.Crossbar_Models import *
 ############################ PARAMETERS ##############################
 
 # Dimensions of the crossbar
-input,output = (32,32)
+input,output = (784,64)
 
 # Initialize each model instance
 Models = [
     JeongModel("Jeong"),
     JeongModel_avg("Jeong_avg"),
-    JeongModel_avgv2("Jeong_avgv2"),
+    JeongModel_avgv2("Jeong_new"),
     IdealModel("Ideal"),
     DMRModel("DMR_old"),
     DMRModel_acc("DMR"),
@@ -47,6 +47,13 @@ Models = [
     CrossSimModel("CrossSim2",Verr_th=1e-1),
     CrossSimModel("CrossSim3",Verr_th=1e-2),
     CrossSimModel("CrossSim4",Verr_th=1e-3),
+    CrossSimModel("CrossSim5",Verr_th=1e-4),
+    CrossSimModel("CrossSim6",Verr_th=1e-5),
+    CrossSimModel("CrossSim7",Verr_th=1e-6),
+    CrossSimModel("CrossSim8",Verr_th=1e-7),
+    CrossSimModel("CrossSim9",Verr_th=1e-8),
+    CrossSimModel("CrossSim10",Verr_th=1e-9),
+    CrossSimModel("CrossSim11",Verr_th=1e-10),
     LTSpiceModel("LTSpice"),
     NgSpiceModel("NgSpice"),
     NgSpiceNonLinearModel("NgSpiceNonLinear"),
@@ -55,18 +62,18 @@ Models = [
 ]
 
 
-# enabled_models = [ "Ideal","DMR_acc","Gamma_acc", "CrossSim","Memtorch_cpp","Memtorch_python","NgSpice"]
+enabled_models = [ "Ideal","Jeong","Jeong_new","DMR","Gamma","CrossSim1","CrossSim2"]
 # enabled_models = [model.name for model in Models]
-enabled_models = [ "Ideal","Jeong","Jeong_avg","Jeong_avgv2","DMR","Gamma","CrossSim1","CrossSim2","CrossSim3","CrossSim4","CrossSim_ref","Memtorch","NgSpice"]
+# enabled_models = [ "Ideal","Jeong_avgv2","DMR","Gamma","CrossSim1","CrossSim2","CrossSim3","CrossSim4","CrossSim5","CrossSim6","CrossSim7","CrossSim8","CrossSim9","CrossSim10","Memtorch","NgSpice"]
 
-reference_model = "LTSpice"
+reference_model = "Memtorch"
 
 # Low resistance proggramming value
 R_lrs = 1000
 Rhrs_percentage=50
 # parasitic resistance value
 parasiticResistance = np.arange(0.2, 5, 0.2)
-parasiticResistance = np.array([2])
+parasiticResistance = np.array([0.1])
 
 # Memory window (ratio between Hrs and Lrs)
 memoryWindow = np.arange(5, 101, 5)
@@ -81,7 +88,7 @@ Metric_type = 1
 
 # Variability parameters
 v_flag = 1
-v_size = 10
+v_size = 1
 
 
 
@@ -256,11 +263,11 @@ markers = ['o', 's', 'D', '^', 'v', 'p']
 # Figures Selection
 Simulation_times_plot = 1
 
-Absolute_current_plots = 1
+Absolute_current_plots = 0
 Relative_error_plots = 1
 
 Voltage_drops_plot = 1
-Voltage_drops_error_plot = 1
+Voltage_drops_error_plot = 0
 
 Metric_plot = 1
 Mean_Metric_plot = 1
@@ -574,6 +581,7 @@ if Winning_models_map:
 
 
 
+
 if scatter_plot:
     mean_Metric = np.mean(Metric, axis=0).mean(axis=0)
     variance_Metric = np.var(Metric, axis=0).mean(axis=0)  # Compute variance
@@ -588,9 +596,7 @@ if scatter_plot:
         plot_times = simulation_times[:-1]
         plot_Metric = mean_Metric
         plot_variance = variance_Metric  # Use full variance array
-
     fig, ax = plt.subplots()
-
     # Filter data for "CrossSim" models
     crosssim_indices = [i for i, model in enumerate(plot_models) if model.startswith("CrossSim")]
     if len(crosssim_indices) > 1:
@@ -602,7 +608,6 @@ if scatter_plot:
         reg_line_y = np.exp(reg.predict(np.log(reg_line_x)))  # Convert the predicted log values back to the original scale
         # Plot regression line
         ax.plot(reg_line_x, reg_line_y, color='blue', linestyle='--', linewidth=1.5, label='CrossSim Regression')
-
     scatter = ax.scatter(
         plot_times,
         plot_Metric,
@@ -613,27 +618,18 @@ if scatter_plot:
         edgecolor="black",
         linewidth=0.7
     )
-
     # Plot variance bars
     for i, (x, y, var) in enumerate(zip(plot_times, plot_Metric, plot_variance)):
         ax.errorbar(x, y, yerr=np.sqrt(var), fmt='o',
                     color=colors[crosssim_indices[1] % len(colors)] if i in crosssim_indices else colors[(i + 1) % len(colors)], capsize=5)
-
-    # Annotate non-CrossSim models
-    for i, model in enumerate(plot_models):
-        if not model.startswith("CrossSim"):
-            ax.annotate(
-                model, (plot_times[i], plot_Metric[i]),
-                textcoords="offset points", xytext=(10, 0), ha='left'
-            )
-
+    # # Annotate non-CrossSim models
+    # for i, model in enumerate(plot_models):
+    #     if not model.startswith("CrossSim"):
+    #         ax.annotate(
+    #             model, (plot_times[i], plot_Metric[i]),
+    #             textcoords="offset points", xytext=(10, 0), ha='left'
+    #         )
     ax.grid(True, which="both", linestyle='--', linewidth=0.5, color="gray", alpha=0.7)
-
-    # Highlight Pareto front
-    sorted_indices = np.argsort(plot_times)
-    pareto_times = np.array(plot_times)[sorted_indices]
-    pareto_Metric = np.array(plot_Metric)[sorted_indices]
-
     # Legend Handles
     legend_handles = [
         plt.Line2D([0], [0], marker='o', color='w', label=plot_models[i],
@@ -643,99 +639,102 @@ if scatter_plot:
     # Add regression line to the legend
     legend_handles.append(plt.Line2D([0], [0], color='blue', linestyle='--', label='CrossSim'))
     ax.legend(handles=legend_handles, title="Models", bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
-
     # Set log scale for x-axis (simulation time)
     ax.set_xscale('log')
     ax.set_xlabel('Normalized Simulation Time (log scale)' if "Ideal" in enabled_models else 'Execution Time (seconds, log scale)')
     ax.set_ylabel(error_label)
-    ax.set_title('Scatter Plot' + '\n' + array_size_string)
-
+    ax.set_title('Scatter Plot' + ' (' + array_size_string +  ')\n' )
     # Add Inset for low-error models
-    inset_ax = inset_axes(ax, width="40%", height="40%", loc='upper right')
+    inset_ax = inset_axes(ax, width="60%", height="60%", loc='upper right')
     threshold = 0.1  # Adjust as needed for "low-error" models
     low_error_indices = [i for i, metric in enumerate(plot_Metric) if metric < threshold]
-    inset_times = np.array(plot_times)[low_error_indices]
+    inset_times = np.array(plot_times)[low_error_indices].reshape(-1, 1)
     inset_metrics = np.array(plot_Metric)[low_error_indices]
     inset_variance = np.array(plot_variance)[low_error_indices]
-
+    # Linear regression for inset (CrossSim models)
+    if len(crosssim_indices) > 1:
+        inset_crosssim_times = np.array(plot_times)[crosssim_indices].reshape(-1, 1)
+        inset_crosssim_metrics = np.array(plot_Metric)[crosssim_indices]
+        inset_reg = LinearRegression().fit(np.log(inset_crosssim_times), np.log(inset_crosssim_metrics))
+        inset_reg_line_x = np.linspace(inset_crosssim_times.min(), inset_crosssim_times.max(), 100).reshape(-1, 1)
+        inset_reg_line_y = np.exp(inset_reg.predict(np.log(inset_reg_line_x)))
+        inset_ax.plot(inset_reg_line_x, inset_reg_line_y, color='blue', linestyle='--', linewidth=1.5, label='Inset Regression')
     inset_ax.scatter(inset_times, inset_metrics, c=[colors[(i + 1) % len(colors)] for i in low_error_indices],
                      s=60, marker='o', edgecolor="black", linewidth=0.7)
     for i, (x, y, var) in enumerate(zip(inset_times, inset_metrics, inset_variance)):
         inset_ax.errorbar(x, y, yerr=np.sqrt(var), fmt='o', color=colors[(low_error_indices[i] + 1) % len(colors)], capsize=3)
-
     inset_ax.set_xscale('log')
     inset_ax.set_yscale('log')
     inset_ax.grid(True, which="both", linestyle='--', linewidth=0.5, alpha=0.7)
-    inset_ax.set_title("Zoom on Low-Error Models", fontsize=10)
+    inset_ax.set_title("Logaritmic Zoom on Low-Error Models", fontsize=10)
     inset_ax.tick_params(axis='both', which='major', labelsize=8)
-
     # Save and show the plot
     plt.tight_layout()
     plt.savefig(folder + '/Figure_Scatter_SimulationTimes_vs_error_with_inset.png')
     plt.show()
 
 
-if spider_plot:
-    # Take the mean over the first 2 dimensions for Current_error and Voltage_error
-    current_error_mean = np.mean(Current_error, axis=(0, 1))
-    voltage_error_mean = np.mean(Voltage_error, axis=(0, 1))
-    # Compute the inverse of all metrics (as smaller is better)
-    inverse_current_error = 1 / current_error_mean
-    inverse_voltage_error = 1 / voltage_error_mean
-    inverse_simulation_times = 1 / simulation_times[:-1]
-    # Handle "Ideal" model
-    if "Ideal" in enabled_models:
-        ideal_index = enabled_models.index("Ideal")
-        # Remove "Ideal" data from metrics
-        inverse_simulation_times = np.delete(inverse_simulation_times, ideal_index)
-        inverse_voltage_error = np.delete(inverse_voltage_error, ideal_index)
-        inverse_current_error = np.delete(inverse_current_error, ideal_index)
-        # Remove "Ideal" from enabled_models
-        enabled_models = [model for i, model in enumerate(enabled_models) if i != ideal_index]
-    # Combine metrics for radar plot
-    metrics = np.vstack([inverse_current_error, inverse_voltage_error, inverse_simulation_times])
-    # Normalize each metric to [0, 1]
-    metrics_min = metrics.min(axis=1, keepdims=True)
-    metrics_max = metrics.max(axis=1, keepdims=True)
-    metrics_scaled = metrics / metrics.max(axis=1, keepdims=True)
-    # Labels and angles for the radar plot
-    labels = ['Current Accuracy', 'Voltage Accuracy', 'Simulation Speed']
-    angles = [n / float(len(labels)) * 2 * pi for n in range(len(labels))]
-    angles += angles[:1]  # Repeat the first angle to close the polygon
-    model_colors = colors[:len(enabled_models)]  # Map colors to models
-    # Radar plot setup
-    fig, ax = plt.subplots(figsize=(10, 10), subplot_kw={'polar': True})
-    ax.spines['polar'].set_visible(False)  # Remove default grid circle
-    ax.set_facecolor('#f9f9f9')  # Light gray background
-    ax.grid(color='gray', linestyle='--', linewidth=0.5, alpha=0.5)  # Faint gridlines
-    ax.set_yticks([])  # Remove radial ticks
-    # Plot for each model
-    for i, (model_name, color) in enumerate(zip(enabled_models[:-1], model_colors[1:])):
-        values = metrics_scaled[:, i].tolist()
-        values += values[:1]  # Repeat the first value to close the polygon
-        ax.plot(angles, values, label=model_name, color=color, linewidth=2)
-        ax.fill(angles, values, color=color, alpha=0.25)
-    # Customize axis labels
-    ax.set_xticks(angles[:-1])
-    ax.set_xticklabels(labels, fontsize=12, fontweight='bold', color='black')
-    # Title
-    ax.set_title("Models Performance Comparison\n"+array_size_string, size=18, pad=30, color='black')
-    # Customize legend
-    ax.legend(
-        loc='upper right',
-        bbox_to_anchor=(1.3, 1.1),
-        fontsize=12,
-        title="Models",
-        title_fontsize=14,
-        frameon=True,
-        fancybox=True,
-        shadow=True,
-        borderpad=1.2,
-        labelspacing=1.2,
-    )
-    plt.tight_layout()
-    plt.savefig(folder + '/Figure_Spider_plot.png')
-    plt.show()
+# if spider_plot:
+#     # Take the mean over the first 2 dimensions for Current_error and Voltage_error
+#     current_error_mean = np.mean(Current_error, axis=(0, 1))
+#     voltage_error_mean = np.mean(Voltage_error, axis=(0, 1))
+#     # Compute the inverse of all metrics (as smaller is better)
+#     inverse_current_error = 1 / current_error_mean
+#     inverse_voltage_error = 1 / voltage_error_mean
+#     inverse_simulation_times = 1 / simulation_times[:-1]
+#     # Handle "Ideal" model
+#     if "Ideal" in enabled_models:
+#         ideal_index = enabled_models.index("Ideal")
+#         # Remove "Ideal" data from metrics
+#         inverse_simulation_times = np.delete(inverse_simulation_times, ideal_index)
+#         inverse_voltage_error = np.delete(inverse_voltage_error, ideal_index)
+#         inverse_current_error = np.delete(inverse_current_error, ideal_index)
+#         # Remove "Ideal" from enabled_models
+#         enabled_models = [model for i, model in enumerate(enabled_models) if i != ideal_index]
+#     # Combine metrics for radar plot
+#     metrics = np.vstack([inverse_current_error, inverse_voltage_error, inverse_simulation_times])
+#     # Normalize each metric to [0, 1]
+#     metrics_min = metrics.min(axis=1, keepdims=True)
+#     metrics_max = metrics.max(axis=1, keepdims=True)
+#     metrics_scaled = metrics / metrics.max(axis=1, keepdims=True)
+#     # Labels and angles for the radar plot
+#     labels = ['Current Accuracy', 'Voltage Accuracy', 'Simulation Speed']
+#     angles = [n / float(len(labels)) * 2 * pi for n in range(len(labels))]
+#     angles += angles[:1]  # Repeat the first angle to close the polygon
+#     model_colors = colors[:len(enabled_models)]  # Map colors to models
+#     # Radar plot setup
+#     fig, ax = plt.subplots(figsize=(10, 10), subplot_kw={'polar': True})
+#     ax.spines['polar'].set_visible(False)  # Remove default grid circle
+#     ax.set_facecolor('#f9f9f9')  # Light gray background
+#     ax.grid(color='gray', linestyle='--', linewidth=0.5, alpha=0.5)  # Faint gridlines
+#     ax.set_yticks([])  # Remove radial ticks
+#     # Plot for each model
+#     for i, (model_name, color) in enumerate(zip(enabled_models[:-1], model_colors[1:])):
+#         values = metrics_scaled[:, i].tolist()
+#         values += values[:1]  # Repeat the first value to close the polygon
+#         ax.plot(angles, values, label=model_name, color=color, linewidth=2)
+#         ax.fill(angles, values, color=color, alpha=0.25)
+#     # Customize axis labels
+#     ax.set_xticks(angles[:-1])
+#     ax.set_xticklabels(labels, fontsize=12, fontweight='bold', color='black')
+#     # Title
+#     ax.set_title("Models Performance Comparison\n"+array_size_string, size=18, pad=30, color='black')
+#     # Customize legend
+#     ax.legend(
+#         loc='upper right',
+#         bbox_to_anchor=(1.3, 1.1),
+#         fontsize=12,
+#         title="Models",
+#         title_fontsize=14,
+#         frameon=True,
+#         fancybox=True,
+#         shadow=True,
+#         borderpad=1.2,
+#         labelspacing=1.2,
+#     )
+#     plt.tight_layout()
+#     plt.savefig(folder + '/Figure_Spider_plot.png')
+#     plt.show()
 
 
 
