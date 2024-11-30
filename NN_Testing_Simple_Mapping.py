@@ -9,6 +9,7 @@ import pytz
 import os
 import gc
 from CrossbarModels.Models import memtorch_bindings # type: ignore
+from CrossbarModels.Crossbar_Models_pytorch import jeong_model, dmr_model, gamma_model, solve_passive_model
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 import math
 
@@ -31,22 +32,6 @@ class CustomLayer(nn.Module):
         output = Currents / self.mapping_coefficient
         return output.to(x.device) + self.bias.to(x.device)  # Move output to original device
 
-# Placeholder model functions
-def solve_passive_model(weight, x, parasiticResistance):
-    return memtorch_bindings.solve_passive(
-        weight,
-        x,
-        torch.zeros(weight.shape[0]),
-        parasiticResistance,
-        parasiticResistance,
-        n_input_batches=x.shape[0]
-    )
-
-def IdealModel(weight, x, parasiticResistance):
-    # Placeholder for another model's implementation
-    if len(x.shape) == 1:
-        x = x.unsqueeze(0)  # Add batch dimension if input is a single sample
-    return torch.matmul(x, weight)  # Supports batched input
 
 # Standard Neural Network
 class NetStandard(nn.Module):
@@ -116,7 +101,7 @@ if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Parameters
-    R_lrs = 1e3  # Low resistance state in Ohms
+    R_lrs = 1e4  # Low resistance state in Ohms
 
     # Save results
     end = datetime.datetime.now(pytz.timezone('Europe/Rome'))
@@ -131,8 +116,8 @@ if __name__ == '__main__':
     print(f"Accuracy of standard network: {standard_accuracy:.2f}%")
  
     # Custom networks with varying parasiticResistance and models
-    parasitic_resistances = torch.arange(10, 10.01, 0.05).tolist()  # Sweep from 0.01 to 0.3 with step of 0.05
-    model_functions = [solve_passive_model]
+    parasitic_resistances = torch.arange(0.01, 1, 0.05).tolist()  # Sweep from 0.01 to 0.3 with step of 0.05
+    model_functions = [ jeong_model, dmr_model, gamma_model, solve_passive_model]
     custom_accuracies = {model_function.__name__: [] for model_function in model_functions}
     confusion_data = []
 
