@@ -10,8 +10,14 @@ class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
         # Two fully connected layers
-        self.fc1 = nn.Linear(28 * 28, 64)  # Input: 784, Hidden Layer: 256 neurons
-        self.fc2 = nn.Linear(64, 10)       # Hidden Layer: 256 neurons, Output: 10 classes
+        self.fc1 = nn.Linear(28 * 28, 64)  # Input: 784, Hidden Layer: 64 neurons
+        self.fc2 = nn.Linear(64, 10)       # Hidden Layer: 64 neurons, Output: 10 classes
+
+        # Initialize weights to be positive
+        nn.init.uniform_(self.fc1.weight, a=0.01, b=0.1)
+        nn.init.uniform_(self.fc2.weight, a=0.01, b=0.1)
+        nn.init.constant_(self.fc1.bias, 0.01)
+        nn.init.constant_(self.fc2.bias, 0.01)
 
     def forward(self, x):
         # Flatten the input image
@@ -31,12 +37,12 @@ def main():
     # Hyperparameters
     batch_size = 64
     learning_rate = 0.001
-    epochs = 10
+    epochs = 20
 
     # Data loading and preprocessing
     transform = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,))  # Normalize to mean=0.1307, std=0.3081
+        transforms.Lambda(lambda x: x)  # Scale to range [0, 0.5]
     ])
     train_dataset = datasets.MNIST('./data', train=True, download=True, transform=transform)
     test_dataset = datasets.MNIST('./data', train=False, download=True, transform=transform)
@@ -66,6 +72,11 @@ def main():
             loss.backward()
             optimizer.step()
 
+            # Enforce positive weights
+            with torch.no_grad():
+                model.fc1.weight.data = abs(model.fc1.weight.data)
+                model.fc2.weight.data = abs(model.fc2.weight.data)
+
             train_loss += loss.item()
             pred = output.argmax(dim=1, keepdim=True)
             correct += pred.eq(target.view_as(pred)).sum().item()
@@ -74,17 +85,22 @@ def main():
         train_accuracy = 100. * correct / len(train_loader.dataset)
         print(f'Epoch: {epoch + 1}, Loss: {train_loss:.6f}, Accuracy: {train_accuracy:.2f}%')
 
-
         # Save the trained weights
     torch.save({
         'fc1_weights': model.fc1.weight.data.numpy(),
         'fc1_bias': model.fc1.bias.data.numpy(),
         'fc2_weights': model.fc2.weight.data.numpy(),
         'fc2_bias': model.fc2.bias.data.numpy(),
-    }, 'fc_layers_weights.pth')
+    }, 'fc_layers_weights_positive_v2.pth')
 
+    print({
+        'fc1_weights': model.fc1.weight.data.numpy(),
+        'fc1_bias': model.fc1.bias.data.numpy(),
+        'fc2_weights': model.fc2.weight.data.numpy(),
+        'fc2_bias': model.fc2.bias.data.numpy(),
+    })
     # Save the entire state_dict of the model
-    torch.save(model.state_dict(), 'model_standard.pth')
+    torch.save(model.state_dict(), 'model_standard_positive_v2.pth')
 
     # Evaluation loop
     model.eval()
@@ -103,13 +119,6 @@ def main():
     test_loss /= len(test_loader.dataset)
     test_accuracy = 100. * correct / len(test_loader.dataset)
     print(f'\nTest Loss: {test_loss:.6f}, Test Accuracy: {test_accuracy:.2f}%')
-
-
-
-
-
-
-
 
 if __name__ == "__main__":
     main()

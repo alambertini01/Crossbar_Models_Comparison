@@ -62,7 +62,7 @@ Models = [
 ]
 
 
-enabled_models = [ "Ideal","Jeong","Jeong_new","DMR","Gamma","CrossSim1","CrossSim2"]
+enabled_models = [ "Ideal","Jeong","Jeong_new","DMR","Gamma"]
 # enabled_models = [model.name for model in Models]
 # enabled_models = [ "Ideal","Jeong_avgv2","DMR","Gamma","CrossSim1","CrossSim2","CrossSim3","CrossSim4","CrossSim5","CrossSim6","CrossSim7","CrossSim8","CrossSim9","CrossSim10","Memtorch","NgSpice"]
 
@@ -73,7 +73,7 @@ R_lrs = 1000
 Rhrs_percentage=50
 # parasitic resistance value
 parasiticResistance = np.arange(0.2, 5, 0.2)
-parasiticResistance = np.array([0.1])
+# parasiticResistance = np.array([0.1])
 
 # Memory window (ratio between Hrs and Lrs)
 memoryWindow = np.arange(5, 101, 5)
