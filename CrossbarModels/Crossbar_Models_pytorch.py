@@ -94,28 +94,14 @@ def gamma_model(weight, x, parasiticResistance):
 # Memtorch solve_passive model
 # Uses memtorch_bindings to solve passive networks and obtain voltage drops and currents
 def solve_passive_model(weight, x, parasiticResistance):
-    if len(x.shape) == 1:
-        x = x.unsqueeze(0)  # Ensure x has a batch dimension
-
-    batch_size = x.shape[0]
-    outputs = []
-
-    for i in range(batch_size):
-        input_sample = x[i]  # Shape: [input_features]
-        output_sample = memtorch_bindings.solve_passive(
-            weight,
-            input_sample,
-            torch.zeros(weight.shape[0]),
-            parasiticResistance,
-            parasiticResistance,
-            det_readout_currents=False
-        )
-        outputs.append(output_sample.unsqueeze(0))  # Shape: [1, output_features]
-
-    voltage_drops = torch.cat(outputs, dim=0)  # Shape: [batch_size, output_features]
-    print(voltage_drops)
-    result = torch.sum(weight * voltage_drops, dim=1)
-    return result
+    return memtorch_bindings.solve_passive(
+        weight,
+        x,
+        torch.zeros(weight.shape[0]),
+        parasiticResistance,
+        parasiticResistance,
+        n_input_batches=x.shape[0]
+    )
 
 # Ideal model implementation
 # Computes currents based on ideal weight and input conditions
