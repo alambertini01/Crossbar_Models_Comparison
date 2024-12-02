@@ -73,22 +73,22 @@ R_lrs = 1000
 Rhrs_percentage=50
 # parasitic resistance value
 parasiticResistance = np.arange(0.2, 5, 0.2)
-# parasiticResistance = np.array([0.1])
+parasiticResistance = np.array([1])
 
 # Memory window (ratio between Hrs and Lrs)
 memoryWindow = np.arange(5, 101, 5)
-memoryWindow = np.array([20])
+memoryWindow = np.array([2])
 
 # Input voltages parameters
-v_On_percentage = 100
-population = [1, 0.0]
+v_On_percentage = 10
+population = [0.5, 0.0]
 
 # Metric type (2=Current*Times, 1=Current, 0=Voltage)
 Metric_type = 1
 
 # Variability parameters
 v_flag = 1
-v_size = 1
+v_size = 2
 
 
 
@@ -263,7 +263,7 @@ markers = ['o', 's', 'D', '^', 'v', 'p']
 # Figures Selection
 Simulation_times_plot = 1
 
-Absolute_current_plots = 0
+Absolute_current_plots = 1
 Relative_error_plots = 1
 
 Voltage_drops_plot = 1

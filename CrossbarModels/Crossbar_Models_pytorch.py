@@ -1,5 +1,6 @@
 import torch
 from .Models import memtorch_bindings # type: ignore
+from torch.autograd import Variable
 
 # Jeong model implementation
 # Computes voltage drops and currents for given weights and inputs
@@ -13,9 +14,9 @@ def jeong_model(weight, x, parasiticResistance):
     B_jeong_matrix = B_jeong.view(-1, 1).repeat(1, output_size)
     # Calculate voltage drops
     V_a_matrix = x.view(-1, 1).repeat(1, output_size)
-    voltage_drops_jeong = (weight * torch.reciprocal(A_jeong_matrix + weight + B_jeong_matrix)) * V_a_matrix
+    voltage_drops_jeong = (weight * torch.reciprocal(A_jeong_matrix + torch.reciprocal(weight) + B_jeong_matrix)) * V_a_matrix
     # Calculate currents
-    current_jeong = torch.matmul(x, torch.reciprocal(A_jeong_matrix + weight + B_jeong_matrix))
+    current_jeong = torch.matmul(x, torch.reciprocal(A_jeong_matrix + torch.reciprocal(weight) + B_jeong_matrix))
     return current_jeong
 
 # DMR model implementation
@@ -93,14 +94,28 @@ def gamma_model(weight, x, parasiticResistance):
 # Memtorch solve_passive model
 # Uses memtorch_bindings to solve passive networks and obtain voltage drops and currents
 def solve_passive_model(weight, x, parasiticResistance):
-    return memtorch_bindings.solve_passive(
-        weight,
-        x,
-        torch.zeros(weight.shape[0]),
-        parasiticResistance,
-        parasiticResistance,
-        n_input_batches=x.shape[0]
-    )
+    if len(x.shape) == 1:
+        x = x.unsqueeze(0)  # Ensure x has a batch dimension
+
+    batch_size = x.shape[0]
+    outputs = []
+
+    for i in range(batch_size):
+        input_sample = x[i]  # Shape: [input_features]
+        output_sample = memtorch_bindings.solve_passive(
+            weight,
+            input_sample,
+            torch.zeros(weight.shape[0]),
+            parasiticResistance,
+            parasiticResistance,
+            det_readout_currents=False
+        )
+        outputs.append(output_sample.unsqueeze(0))  # Shape: [1, output_features]
+
+    voltage_drops = torch.cat(outputs, dim=0)  # Shape: [batch_size, output_features]
+    print(voltage_drops)
+    result = torch.sum(weight * voltage_drops, dim=1)
+    return result
 
 # Ideal model implementation
 # Computes currents based on ideal weight and input conditions
@@ -108,3 +123,111 @@ def IdealModel(weight, x, parasiticResistance):
     if len(x.shape) == 1:
         x = x.unsqueeze(0)  # Add batch dimension if input is a single sample
     return torch.matmul(x, weight)  # Supports batched input
+
+# CrossSim model implementation
+# Iteratively solves for voltage and current using parasitic resistance
+
+
+
+def crosssim_model(weight, x, parasiticResistance, Verr_th=1e-2, hide_convergence_msg=0):
+    """Wrapper that implements a convergence loop around the circuit solver using PyTorch.
+
+    Each solver uses successive under-relaxation.
+
+    If the circuit solver fails to find a solution, the relaxation parameter will
+    be reduced until the solver converges, or a lower limit on the relaxation parameter
+    is reached (returns a ValueError)
+    """
+
+    def mvm_parasitics(vector, matrix, parasiticResistance, gamma, Verr_th):
+        # Flatten the vector if it has an extra batch dimension
+        if len(vector.shape) > 2:
+            vector = vector.view(vector.shape[0], -1)
+        """Calculates the MVM result including parasitic resistance, for a non-interleaved array using PyTorch.
+
+        vector : input tensor
+        matrix : normalized conductance tensor
+        """
+        # Parasitic resistance
+        Rp_in = Rp_out = parasiticResistance
+
+        Niters_max = 1000
+
+        # Initialize error and number of iterations
+        Verr = 1e9
+        Niters = 0
+
+        # Initial estimate of device currents
+        if len(vector.shape) == 2:
+            batch_size, input_dim = vector.shape
+        else:
+            batch_size, input_dim = 1, vector.shape[0]
+        dV0 = vector.view(batch_size, input_dim, 1).expand(batch_size, input_dim, matrix.shape[1])
+        Ires = dV0 * matrix.unsqueeze(0)
+        dV = dV0.clone()
+        
+        # Iteratively calculate parasitics and update device currents
+        while Verr > Verr_th and Niters < Niters_max:
+            # Calculate parasitic voltage drops
+            Isum_col = torch.cumsum(Ires, dim=1)
+            Isum_row = torch.cumsum(Ires.flip(dims=[0]), dim=0).flip(dims=[0])
+
+            Vdrops_col = Rp_out * torch.cumsum(Isum_col.flip(dims=[1]), dim=1).flip(dims=[1])
+            Vdrops_row = Rp_in * torch.cumsum(Isum_row, dim=0)
+            Vpar = Vdrops_col + Vdrops_row
+
+            # Calculate the error for the current estimate of memristor currents
+            VerrMat = dV0 - Vpar - dV
+
+            # Evaluate overall error
+            Verr = torch.max(torch.abs(VerrMat))
+            if Verr < Verr_th:
+                break
+
+            # Update memristor currents for the next iteration
+            dV += gamma * VerrMat
+            Ires = matrix * dV
+            Niters += 1
+
+        # Calculate the summed currents on the columns
+        Icols = torch.sum(Ires, dim=1)
+        # Should add some more checks here on whether the results of this calculation are erroneous even if it converged
+        if Verr > Verr_th:
+            raise RuntimeError("Parasitic resistance too high: could not converge!")
+        if torch.isnan(Icols).any():
+            raise RuntimeError("Nans due to parasitic resistance simulation")
+        
+        return Icols
+
+
+    solved, retry = False, False
+    input_size, output_size = weight.shape
+    initial_gamma = min(0.9, 20 / (input_size + output_size) / parasiticResistance)  # Save the initial gamma
+    gamma = initial_gamma
+
+    while not solved:
+        solved = True
+        try:
+            result = mvm_parasitics(
+                x,
+                weight.clone(),
+                parasiticResistance,
+                gamma,
+                Verr_th
+            )
+
+        except RuntimeError:
+            solved, retry = False, True
+            gamma *= 0.8
+            if gamma <= 1e-2:
+                raise ValueError("Parasitic MVM solver failed to converge")
+    if retry and not hide_convergence_msg:
+        print(
+            "CrossSim - Initial gamma: {:.5f}, Reduced gamma: {:.5f}".format(
+                initial_gamma,
+                gamma,
+            )
+        )
+
+    return result
+
