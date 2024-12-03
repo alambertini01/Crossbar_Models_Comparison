@@ -66,9 +66,9 @@ if __name__ == "__main__":
     print(f"Using device: {device}")
 
     # Hyperparameters
-    batch_size = 64
+    batch_size = 128
     learning_rate = 0.001
-    epochs = 5
+    epochs = 20
 
     # Data loading and preprocessing
     transform = transforms.Compose([
