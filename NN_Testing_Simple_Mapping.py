@@ -72,20 +72,19 @@ if __name__ == '__main__':
 
     # Test dataset parameters
     batch_size = 32
-    subset_indices = torch.arange(100)
+    subset_indices = torch.arange(60)
 
     # Crossbar parameters
     R_lrs = 1e3  
-    parasitic_resistances = torch.arange(0.0001, 2, 0.1).tolist()
+    parasitic_resistances = torch.arange(0.0001, 1.75, 0.1).tolist()
 
     # Enabled models
-    model_functions = [crosssim_model, jeong_model, dmr_model, gamma_model, IdealModel]
+    model_functions = [crosssim_model, jeong_model, IdealModel]
 
     # Plotting parameters
     debug_plot = False  # Set to True to enable debugging plots
     debug_index = 0  # Set the index of the currents to plot for debugging
     selected_model = model_functions[0]  # Change this to select a different model for confusion matrix plotting
-
 
     # List available trained models
     trained_models_folder = "Models/Trained"
@@ -161,9 +160,9 @@ if __name__ == '__main__':
                 confusion_data.append((
                     custom_preds,
                     custom_targets,
-                    f"Custom Network (parasiticResistance={parasiticResistance}, model={model_function.__name__})"
+                    f"Rpar={parasiticResistance:.2f}, model={model_function.__name__})"
                 ))
-            print(f"Accuracy of custom network (parasiticResistance={parasiticResistance}, model={model_function.__name__}): {custom_accuracy:.2f}%")
+            print(f"Accuracy of custom network (parasiticResistance={parasiticResistance:.2f}, model={model_function.__name__}): {custom_accuracy:.2f}%")
             # Debugging plot
             if debug_plot:
                 color = colors[model_function.__name__]
@@ -173,7 +172,7 @@ if __name__ == '__main__':
                     color=color,
                     label=model_function.__name__
                 )
-                ax1.set_title(f'Layer 1 Currents (parasiticResistance={parasiticResistance})')
+                ax1.set_title(f'Layer 1 Currents (parasiticResistance={parasiticResistance:.2f})')
                 ax1.set_xlabel('Index')
                 ax1.set_ylabel('Current')
                 ax1.legend()
@@ -183,7 +182,7 @@ if __name__ == '__main__':
                     color=color,
                     label=model_function.__name__
                 )
-                ax2.set_title(f'Layer 2 Currents (parasiticResistance={parasiticResistance})')
+                ax2.set_title(f'Layer 2 Currents (parasiticResistance={parasiticResistance:.2f})')
                 ax2.set_xlabel('Index')
                 ax2.set_ylabel('Current')
                 ax2.legend()

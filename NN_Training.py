@@ -141,14 +141,14 @@ if __name__ == "__main__":
         os.makedirs(save_folder)
 
     torch.save({
-        'fc1_weights': model.fc1.weight.data.numpy(),
-        'fc1_bias': model.fc1.bias.data.numpy(),
-        'fc2_weights': model.fc2.weight.data.numpy(),
-        'fc2_bias': model.fc2.bias.data.numpy(),
+        'fc1_weights': model.fc1.weight.data.cpu().numpy(),
+        'fc1_bias': model.fc1.bias.data.cpu().numpy(),
+        'fc2_weights': model.fc2.weight.data.cpu().numpy(),
+        'fc2_bias': model.fc2.bias.data.cpu().numpy(),
     }, f'{save_folder}/fc_layers_weights_positive_v2.pth')
 
     # Save the entire state_dict of the model
-    torch.save(model.state_dict(), f'{save_folder}/model_{selected_model_name}_positive.pth')
+    torch.save(model.state_dict(), f'{save_folder}/model_{selected_model_name}_positive_full_statedict.pth')
 
     # Final plot showing the training accuracy
     plt.savefig(f'{save_folder}/training_accuracy.png')
