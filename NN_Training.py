@@ -68,7 +68,7 @@ if __name__ == "__main__":
     # Hyperparameters
     batch_size = 128
     learning_rate = 0.001
-    epochs = 20
+    epochs = 10
 
     # Data loading and preprocessing
     transform = transforms.Compose([
