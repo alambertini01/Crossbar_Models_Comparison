@@ -231,7 +231,7 @@ def crosssim_model(weight, x, parasiticResistance, Verr_th=1e-2, hide_convergenc
         # Parasitic resistance
         Rp_in = Rp_out = parasiticResistance
 
-        Niters_max = 10000
+        Niters_max = 1000
 
         # Initialize error and number of iterations
         Verr = torch.tensor(1e9, device=vector.device, dtype=vector.dtype)
@@ -297,7 +297,7 @@ def crosssim_model(weight, x, parasiticResistance, Verr_th=1e-2, hide_convergenc
         except RuntimeError:
             solved, retry = False, True
             gamma *= 0.8
-            if gamma <= 1e-2:
+            if gamma <= 1e-4:
                 raise ValueError("Parasitic MVM solver failed to converge")
     if retry and not hide_convergence_msg:
         print(
