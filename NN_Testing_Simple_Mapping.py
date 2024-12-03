@@ -8,21 +8,12 @@ import datetime
 import pytz
 import os
 import gc
-from CrossbarModels.Models import memtorch_bindings # type: ignore
-from CrossbarModels.Crossbar_Models_pytorch import jeong_model, dmr_model, gamma_model, solve_passive_model, IdealModel, crosssim_model
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+from CrossbarModels.Crossbar_Models_pytorch import jeong_model, dmr_model, gamma_model, solve_passive_model, crosssim_model, IdealModel
 import math
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 # Custom Layer implementation
 class CustomLayer(nn.Module):
-    def __init__(self, weight, bias, parasiticResistance, R_lrs, model_function):
-        super(CustomLayer, self).__init__()
-        self.weight = torch.tensor(weight).to('cpu')  # Keep on CPU to save GPU memory
-        self.bias = torch.tensor(bias).to('cpu')  # Keep on CPU to save GPU memory
-        self.mapping_coefficient = 1 / R_lrs
-        self.parasiticResistance = parasiticResistance
-        self.model_function = model_function
-
     def __init__(self, weight, bias, parasiticResistance, R_lrs, model_function, debug=False):
         super(CustomLayer, self).__init__()
         self.weight = torch.tensor(weight).to('cpu')  # Keep on CPU to save GPU memory
@@ -43,19 +34,6 @@ class CustomLayer(nn.Module):
             self.currents = Currents.detach().cpu()
         output = Currents / self.mapping_coefficient
         return output.to(x.device) + self.bias.to(x.device)  # Move output to original device
-
-# Standard Neural Network
-class NetStandard(nn.Module):
-    def __init__(self):
-        super(NetStandard, self).__init__()
-        self.fc1 = nn.Linear(28 * 28, 64)
-        self.fc2 = nn.Linear(64, 10)
-
-    def forward(self, x):
-        x = x.view(-1, 28 * 28)
-        x = F.relu(self.fc1(x))
-        x = self.fc2(x)
-        return x
 
 # Custom Neural Network
 class NetCustom(nn.Module):
@@ -86,69 +64,95 @@ def evaluate_model(model, test_loader, device):
     accuracy = 100. * correct / len(test_loader.dataset)
     return accuracy, all_preds, all_targets
 
-# Plot Confusion Matrix
-def plot_confusion_matrix_subplot(ax, y_true, y_pred, title):
-    classes = sorted(set(y_true).union(set(y_pred)))
-    cm = confusion_matrix(y_true, y_pred, labels=classes)
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classes)
-    disp.plot(cmap=plt.cm.Blues, values_format='d', ax=ax)
-    ax.set_title(title)
+
+
 
 # Main Function
 if __name__ == '__main__':
-    # Load weights
-    weights = torch.load('fc_layers_weights_positive_v2.pth', weights_only=False)  # Use weights_only=False for compatibility, ensure you trust the source
+
+    # Test dataset parameters
+    batch_size = 1
+    subset_indices = torch.arange(30)
+
+    # Crossbar parameters
+    R_lrs = 1e3  
+    parasitic_resistances = torch.arange(0.01, 0.22, 0.1).tolist()
+
+    # Enabled models
+    model_functions = [crosssim_model, jeong_model, dmr_model, gamma_model, IdealModel]
+
+    # Plotting parameters
+    debug_plot = False  # Set to True to enable debugging plots
+    debug_index = 0  # Set the index of the currents to plot for debugging
+    selected_model = model_functions[0]  # Change this to select a different model for confusion matrix plotting
+
+
+    # List available trained models
+    trained_models_folder = "Models/Trained"
+    available_models = [d for d in os.listdir(trained_models_folder) if os.path.isdir(os.path.join(trained_models_folder, d))]
+    print("Available trained models:")
+    for i, model_name in enumerate(available_models):
+        print(f"{i}: {model_name}")
+    model_choice = int(input("Select the model number for evaluation: "))
+    selected_model_name = available_models[model_choice]
+    # List subfolders for different parasitic resistance values
+    folder_path = f"{trained_models_folder}/{selected_model_name}"
+    available_rpar_folders = [f for f in os.listdir(folder_path) if os.path.isdir(os.path.join(folder_path, f))]
+    print("Available Rpar values:")
+    for i, rpar_folder in enumerate(available_rpar_folders):
+        print(f"{i}: {rpar_folder}")
+    rpar_choice = int(input("Select the Rpar value for evaluation: "))
+    selected_rpar_folder = available_rpar_folders[rpar_choice]
+    # Load weights and biases from the selected model's folder
+    folder_path = f"{trained_models_folder}/{selected_model_name}/{selected_rpar_folder}"
+    weights_path = f"{folder_path}/fc_layers_weights_positive_v2.pth"
+    # Check if the model exists
+    if not os.path.exists(weights_path):
+        print("The specified weights file does not exist. Please ensure the model is trained and saved correctly.")
+        exit()
+    else:
+        weights = torch.load(weights_path)
 
     # Data transformation
-    transform = transforms.Compose([transforms.ToTensor()])
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Lambda(lambda x: x / 2)  # Scale to range [0, 0.5]
+    ])
 
     # Load test dataset
     test_dataset = datasets.MNIST('./data', train=False, download=True, transform=transform)
-    subset_indices = torch.arange(30)
     small_test_dataset = Subset(test_dataset, subset_indices)
-    small_test_loader = DataLoader(small_test_dataset, batch_size=1, shuffle=False)
+    small_test_loader = DataLoader(small_test_dataset, batch_size=batch_size, shuffle=False)
 
     # Device setup
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Parameters
-    R_lrs = 1e3  # Low resistance state in Ohms
-
-    # Save results
+    # results
     end = datetime.datetime.now(pytz.timezone('Europe/Rome'))
     folder = f'Results/{end.year}{end.month}{end.day}_{end.hour}_{end.minute}_NN_benchmark'
     if not os.path.exists(folder):
         os.makedirs(folder)
+    # Colors for models
+    colors = {
+        'crosssim_model': 'blue',
+        'jeong_model': 'cyan',
+        'gamma_model': 'red',
+        'dmr_model': 'green',
+        'solve_passive_model': 'orange',
+        'IdealModel': 'black'
+    }
 
-    # Standard network evaluation
-    model_standard = NetStandard().to(device)
-    model_standard.load_state_dict(torch.load('model_standard_positive_v2.pth', weights_only=True))
-    standard_accuracy, standard_preds, standard_targets = evaluate_model(model_standard, small_test_loader, device)
-    print(f"Accuracy of standard network: {standard_accuracy:.2f}%")
- 
-    # Custom networks with varying parasiticResistance and models
-    debug_plot = True  # Set to True to enable debugging plots
-    debug_index = 0  # Set the index of the currents to plot for debugging
-    parasitic_resistances = torch.arange(0.01, 0.12, 0.1).tolist()  # Sweep from 0.01 to 0.9 with step of 0.2
-    model_functions = [ solve_passive_model, crosssim_model, jeong_model, dmr_model, gamma_model, IdealModel]
+    # Ideal model evaluation (used for normalization)
+    ideal_model = NetCustom(weights, parasiticResistance=0, R_lrs=R_lrs, model_function=IdealModel).to(device)
+    ideal_accuracy, _, _ = evaluate_model(ideal_model, small_test_loader, device)
+    print(f"Accuracy of ideal model: {ideal_accuracy:.2f}%")
+
     custom_accuracies = {model_function.__name__: [] for model_function in model_functions}
     confusion_data = []
-
-    selected_model = model_functions[0]  # Change this to select a different model for confusion matrix plotting
-
-
 
     for parasiticResistance in parasitic_resistances:
         if debug_plot:
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
-            colors = {
-                'crosssim_model': 'blue',
-                'jeong_model': 'cyan',
-                'gamma_model': 'red',
-                'dmr_model': 'green',
-                'solve_passive_model': 'black',
-                'IdealModel': 'orange'
-            }
         for model_function in model_functions:
             model_custom = NetCustom(weights, parasiticResistance, R_lrs, model_function, debug=debug_plot).to(device)
             custom_accuracy, custom_preds, custom_targets = evaluate_model(model_custom, small_test_loader, device)
@@ -190,14 +194,11 @@ if __name__ == '__main__':
         if debug_plot:
             plt.show()
 
-
-
-
-    # Normalize accuracies by standard model accuracy and plot multiple lines
+    # Normalize accuracies by ideal model accuracy and plot multiple lines
     plt.figure(figsize=(10, 6))
     for model_name, accuracies in custom_accuracies.items():
-        normalized_accuracies = [acc / standard_accuracy for acc in accuracies]
-        plt.plot(parasitic_resistances, normalized_accuracies, marker='o', linestyle='-', label=f'Normalized Accuracy ({model_name})')
+        normalized_accuracies = [acc / ideal_accuracy for acc in accuracies]
+        plt.plot(parasitic_resistances, normalized_accuracies, marker='o', linestyle='-', label=f'Normalized Accuracy ({model_name})', color=colors[model_name])
     plt.xlabel('Parasitic Resistance')
     plt.ylabel('Normalized Accuracy')
     plt.title('Normalized Accuracy vs Parasitic Resistance')
@@ -206,17 +207,24 @@ if __name__ == '__main__':
     plt.tight_layout()
     plt.savefig(folder + "/Normalized_Accuracy_vs_Parasitic_Resistance.png")
     plt.show()
+
     # Plot selected confusion matrices as subplots
     num_confusions = len(confusion_data) + 1
     num_rows = math.ceil(num_confusions / 4)
     fig, axes = plt.subplots(num_rows, 4, figsize=(20, 5 * num_rows))
     axes = axes.ravel()
-    # Plot confusion matrix for standard model
-    plot_confusion_matrix_subplot(axes[0], standard_targets, standard_preds, "Confusion Matrix: Standard Network")
+    # Plot confusion matrix for ideal model
+    cm = confusion_matrix(_, _, labels=sorted(set(_) | set(_)))
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=sorted(set(_) | set(_)))
+    disp.plot(cmap=plt.cm.Blues, values_format='d', ax=axes[0])
+    axes[0].set_title("Confusion Matrix: Ideal Model")
     # Plot confusion matrices for selected custom models
     for i, (custom_preds, custom_targets, title) in enumerate(confusion_data, start=1):
         if i < len(axes):
-            plot_confusion_matrix_subplot(axes[i], custom_targets, custom_preds, title)
+            cm = confusion_matrix(custom_targets, custom_preds, labels=sorted(set(custom_targets) | set(custom_preds)))
+            disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=sorted(set(custom_targets) | set(custom_preds)))
+            disp.plot(cmap=plt.cm.Blues, values_format='d', ax=axes[i])
+            axes[i].set_title(title)
     # Hide any unused subplots
     for j in range(len(confusion_data) + 1, len(axes)):
         fig.delaxes(axes[j])

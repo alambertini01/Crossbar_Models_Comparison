@@ -171,7 +171,7 @@ def crosssim_model(weight, x, parasiticResistance, Verr_th=1e-2, hide_convergenc
                 break
 
             # Update memristor currents for the next iteration
-            dV += gamma * VerrMat
+            dV = dV + gamma * VerrMat
             Ires = matrix * dV
             Niters += 1
 

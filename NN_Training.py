@@ -4,11 +4,19 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
+import matplotlib.pyplot as plt
+import os
+import seaborn as sns
+import numpy as np
+from CrossbarModels.Crossbar_Models_pytorch import jeong_model, dmr_model, gamma_model, solve_passive_model, crosssim_model, IdealModel
 
-# Define the network
-class Net(nn.Module):
-    def __init__(self):
-        super(Net, self).__init__()
+# Define the network with a selectable model function
+class CustomNet(nn.Module):
+    def __init__(self, model_function, parasiticResistance, R_lrs):
+        super(CustomNet, self).__init__()
+        self.model_function = model_function
+        self.parasiticResistance = parasiticResistance
+        self.R_lrs = R_lrs
         # Two fully connected layers
         self.fc1 = nn.Linear(28 * 28, 64)  # Input: 784, Hidden Layer: 64 neurons
         self.fc2 = nn.Linear(64, 10)       # Hidden Layer: 64 neurons, Output: 10 classes
@@ -23,27 +31,51 @@ class Net(nn.Module):
         # Flatten the input image
         x = x.view(-1, 28 * 28)
         # First fully connected layer with ReLU activation
-        x = F.relu(self.fc1(x))
+        x = F.relu(self.model_function(self.fc1.weight.T * (1 / self.R_lrs), x, self.parasiticResistance) / (1 / self.R_lrs) + self.fc1.bias)
         # Output layer
-        x = self.fc2(x)
+        x = self.model_function(self.fc2.weight.T * (1 / self.R_lrs), x, self.parasiticResistance) / (1 / self.R_lrs) + self.fc2.bias
+        # x = torch.clamp(x, min=-1e3, max=1e3)  # Clamp values to prevent extreme values
         return x
 
 # Training and evaluation script
-def main():
+if __name__ == "__main__":
+    # Model selection
+    available_models = {
+        "jeong_model": jeong_model,
+        "dmr_model": dmr_model,
+        "gamma_model": gamma_model,
+        "solve_passive_model": solve_passive_model,
+        "crosssim_model": crosssim_model,
+        "IdealModel": IdealModel
+    }
+    
+    print("Available models:")
+    for i, model_name in enumerate(available_models.keys()):
+        print(f"{i}: {model_name}")
+    
+    model_choice = int(input("Select the model number for training: "))
+    selected_model_name = list(available_models.keys())[model_choice]
+    selected_model_function = available_models[selected_model_name]
+
+    # Select parasitic resistance and R_lrs
+    parasiticResistance = float(input("Enter parasitic resistance value: "))
+    R_lrs = float(input("Enter R_lrs value: "))
+
     # Check for GPU
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
     # Hyperparameters
-    batch_size = 64
+    batch_size = 1
     learning_rate = 0.001
-    epochs = 20
+    epochs = 5
 
     # Data loading and preprocessing
     transform = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Lambda(lambda x: x)  # Scale to range [0, 0.5]
+        transforms.Lambda(lambda x: x / 2)  # Scale to range [0, 0.5]
     ])
+    
     train_dataset = datasets.MNIST('./data', train=True, download=True, transform=transform)
     test_dataset = datasets.MNIST('./data', train=False, download=True, transform=transform)
 
@@ -51,11 +83,14 @@ def main():
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     # Initialize model, optimizer, and loss function
-    model = Net().to(device)
+    model = CustomNet(selected_model_function, parasiticResistance, R_lrs).to(device)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     criterion = nn.CrossEntropyLoss()
 
-    # Training loop
+    # Training loop with accuracy tracking
+    train_accuracies = []
+    plt.figure(figsize=(10, 5))
+
     for epoch in range(epochs):
         model.train()
         train_loss = 0
@@ -70,6 +105,12 @@ def main():
             # Backward pass
             optimizer.zero_grad()
             loss.backward()
+            # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            # Print gradients for debugging
+            # for name, param in model.named_parameters():
+            #     if param.grad is not None:
+            #         print(f'Gradient for {name}: {param.grad.norm()}')
+
             optimizer.step()
 
             # Enforce positive weights
@@ -83,24 +124,35 @@ def main():
 
         train_loss /= len(train_loader.dataset)
         train_accuracy = 100. * correct / len(train_loader.dataset)
+        train_accuracies.append(train_accuracy)
         print(f'Epoch: {epoch + 1}, Loss: {train_loss:.6f}, Accuracy: {train_accuracy:.2f}%')
 
-        # Save the trained weights
+        # Plot accuracy dynamically
+        plt.clf()
+        plt.plot(range(1, epoch + 2), train_accuracies, marker='o', linestyle='-', color='b')
+        plt.xlabel('Epoch')
+        plt.ylabel('Training Accuracy (%)')
+        plt.title('Training Accuracy Over Epochs')
+        plt.pause(0.1)
+
+    # Save the trained weights
+    save_folder = f'Models/Trained/{selected_model_name}/Rpar_{parasiticResistance}'
+    if not os.path.exists(save_folder):
+        os.makedirs(save_folder)
+
     torch.save({
         'fc1_weights': model.fc1.weight.data.numpy(),
         'fc1_bias': model.fc1.bias.data.numpy(),
         'fc2_weights': model.fc2.weight.data.numpy(),
         'fc2_bias': model.fc2.bias.data.numpy(),
-    }, 'fc_layers_weights_positive_v2.pth')
+    }, f'{save_folder}/fc_layers_weights_positive_v2.pth')
 
-    print({
-        'fc1_weights': model.fc1.weight.data.numpy(),
-        'fc1_bias': model.fc1.bias.data.numpy(),
-        'fc2_weights': model.fc2.weight.data.numpy(),
-        'fc2_bias': model.fc2.bias.data.numpy(),
-    })
     # Save the entire state_dict of the model
-    torch.save(model.state_dict(), 'model_standard_positive_v2.pth')
+    torch.save(model.state_dict(), f'{save_folder}/model_{selected_model_name}_positive.pth')
+
+    # Final plot showing the training accuracy
+    plt.savefig(f'{save_folder}/training_accuracy.png')
+    plt.show()
 
     # Evaluation loop
     model.eval()
@@ -120,5 +172,21 @@ def main():
     test_accuracy = 100. * correct / len(test_loader.dataset)
     print(f'\nTest Loss: {test_loss:.6f}, Test Accuracy: {test_accuracy:.2f}%')
 
-if __name__ == "__main__":
-    main()
+    # Save heatmaps of weights and biases
+    fig, axes = plt.subplots(2, 2, figsize=(10, 8))
+    
+    sns.heatmap(model.fc1.weight.data.cpu().numpy(), ax=axes[0, 0], cmap='viridis')
+    axes[0, 0].set_title('FC1 Weights')
+    
+    sns.heatmap(np.expand_dims(model.fc1.bias.data.cpu().numpy(), axis=0), ax=axes[0, 1], cmap='viridis', cbar=False)
+    axes[0, 1].set_title('FC1 Bias')
+    
+    sns.heatmap(model.fc2.weight.data.cpu().numpy(), ax=axes[1, 0], cmap='viridis')
+    axes[1, 0].set_title('FC2 Weights')
+    
+    sns.heatmap(np.expand_dims(model.fc2.bias.data.cpu().numpy(), axis=0), ax=axes[1, 1], cmap='viridis', cbar=False)
+    axes[1, 1].set_title('FC2 Bias')
+    
+    plt.tight_layout()
+    plt.savefig(f'{save_folder}/weights_biases_heatmap.png')
+    plt.close(fig)
