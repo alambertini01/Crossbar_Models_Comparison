@@ -87,6 +87,11 @@ if __name__ == "__main__":
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     criterion = nn.CrossEntropyLoss()
 
+    # Save the trained weights
+    save_folder = f'Models/Trained/{selected_model_name}/Rpar_{parasiticResistance}'
+    if not os.path.exists(save_folder):
+        os.makedirs(save_folder)
+
     # Training loop with accuracy tracking
     train_accuracies = []
     plt.figure(figsize=(10, 5))
@@ -127,6 +132,11 @@ if __name__ == "__main__":
         train_accuracies.append(train_accuracy)
         print(f'Epoch: {epoch + 1}, Loss: {train_loss:.6f}, Accuracy: {train_accuracy:.2f}%')
 
+            # Save checkpoint
+        checkpoint_path = f'{save_folder}/checkpoint_epoch_{epoch}.pth'
+        torch.save(model.state_dict(), checkpoint_path)
+        print(f'Model checkpoint saved at {checkpoint_path}')
+
         # Plot accuracy dynamically
         plt.clf()
         plt.plot(range(1, epoch + 2), train_accuracies, marker='o', linestyle='-', color='b')
@@ -135,10 +145,6 @@ if __name__ == "__main__":
         plt.title('Training Accuracy Over Epochs')
         plt.pause(0.1)
 
-    # Save the trained weights
-    save_folder = f'Models/Trained/{selected_model_name}/Rpar_{parasiticResistance}'
-    if not os.path.exists(save_folder):
-        os.makedirs(save_folder)
 
     torch.save({
         'fc1_weights': model.fc1.weight.data.cpu().numpy(),
