@@ -66,7 +66,7 @@ if __name__ == "__main__":
     print(f"Using device: {device}")
 
     # Hyperparameters
-    batch_size = 1
+    batch_size = 64
     learning_rate = 0.001
     epochs = 5
 
@@ -105,8 +105,8 @@ if __name__ == "__main__":
             # Backward pass
             optimizer.zero_grad()
             loss.backward()
-            # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            # Print gradients for debugging
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            # # Print gradients for debugging
             # for name, param in model.named_parameters():
             #     if param.grad is not None:
             #         print(f'Gradient for {name}: {param.grad.norm()}')

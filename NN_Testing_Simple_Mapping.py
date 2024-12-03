@@ -71,12 +71,12 @@ def evaluate_model(model, test_loader, device):
 if __name__ == '__main__':
 
     # Test dataset parameters
-    batch_size = 1
-    subset_indices = torch.arange(30)
+    batch_size = 32
+    subset_indices = torch.arange(100)
 
     # Crossbar parameters
     R_lrs = 1e3  
-    parasitic_resistances = torch.arange(0.01, 0.22, 0.1).tolist()
+    parasitic_resistances = torch.arange(0.0001, 2, 0.1).tolist()
 
     # Enabled models
     model_functions = [crosssim_model, jeong_model, dmr_model, gamma_model, IdealModel]
@@ -197,15 +197,14 @@ if __name__ == '__main__':
     # Normalize accuracies by ideal model accuracy and plot multiple lines
     plt.figure(figsize=(10, 6))
     for model_name, accuracies in custom_accuracies.items():
-        normalized_accuracies = [acc / ideal_accuracy for acc in accuracies]
-        plt.plot(parasitic_resistances, normalized_accuracies, marker='o', linestyle='-', label=f'Normalized Accuracy ({model_name})', color=colors[model_name])
+        plt.plot(parasitic_resistances, accuracies, marker='o', linestyle='-', label=f'Accuracy ({model_name})', color=colors[model_name])
     plt.xlabel('Parasitic Resistance')
-    plt.ylabel('Normalized Accuracy')
-    plt.title('Normalized Accuracy vs Parasitic Resistance')
+    plt.ylabel('Accuracy')
+    plt.title('Accuracy vs Parasitic Resistance')
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
-    plt.savefig(folder + "/Normalized_Accuracy_vs_Parasitic_Resistance.png")
+    plt.savefig(folder + "/Accuracy_vs_Parasitic_Resistance.png")
     plt.show()
 
     # Plot selected confusion matrices as subplots
@@ -231,3 +230,5 @@ if __name__ == '__main__':
     plt.tight_layout()
     plt.savefig(folder + "/Selected_Confusion_Matrices.png")
     plt.show()
+
+    os.startfile(folder)
