@@ -180,19 +180,14 @@ if __name__ == "__main__":
 
     # Save heatmaps of weights and biases
     fig, axes = plt.subplots(2, 2, figsize=(10, 8))
-    
     sns.heatmap(model.fc1.weight.data.cpu().numpy(), ax=axes[0, 0], cmap='viridis')
     axes[0, 0].set_title('FC1 Weights')
-    
     sns.heatmap(np.expand_dims(model.fc1.bias.data.cpu().numpy(), axis=0), ax=axes[0, 1], cmap='viridis', cbar=False)
     axes[0, 1].set_title('FC1 Bias')
-    
     sns.heatmap(model.fc2.weight.data.cpu().numpy(), ax=axes[1, 0], cmap='viridis')
     axes[1, 0].set_title('FC2 Weights')
-    
     sns.heatmap(np.expand_dims(model.fc2.bias.data.cpu().numpy(), axis=0), ax=axes[1, 1], cmap='viridis', cbar=False)
     axes[1, 1].set_title('FC2 Bias')
-    
     plt.tight_layout()
     plt.savefig(f'{save_folder}/weights_biases_heatmap.png')
     plt.close(fig)

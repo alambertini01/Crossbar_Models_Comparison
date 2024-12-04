@@ -203,6 +203,8 @@ def solve_passive_model(weight, x, parasiticResistance):
         n_input_batches=x.shape[0]
     )
 
+
+
 # Ideal model implementation
 # Computes currents based on ideal weight and input conditions
 def IdealModel(weight, x, parasiticResistance):
@@ -210,10 +212,10 @@ def IdealModel(weight, x, parasiticResistance):
         x = x.unsqueeze(0)  # Add batch dimension if input is a single sample
     return torch.matmul(x, weight)  # Supports batched input
 
+
+
 # CrossSim model implementation
 # Iteratively solves for voltage and current using parasitic resistance
-
-
 def crosssim_model(weight, x, parasiticResistance, Verr_th=1e-2, hide_convergence_msg=0):
     """
     Wrapper that implements a convergence loop around the circuit solver using PyTorch.

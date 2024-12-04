@@ -70,7 +70,6 @@ def evaluate_model(model, test_loader, device):
 
 
 
-
 # Main Function
 if __name__ == '__main__':
 
@@ -80,10 +79,10 @@ if __name__ == '__main__':
 
     # Crossbar parameters
     R_lrs = 1e3  
-    parasitic_resistances = torch.arange(0.0001, 2, 0.1).tolist()
+    parasitic_resistances = torch.arange(0.0001, 3.1, 0.1).tolist()
 
-    # Enabled models
-    model_functions = [crosssim_model, IdealModel]
+    # Enabled models for the accuracy test
+    model_functions = [crosssim_model]
 
     # Plotting parameters
     debug_plot = False  # Set to True to enable debugging plots
