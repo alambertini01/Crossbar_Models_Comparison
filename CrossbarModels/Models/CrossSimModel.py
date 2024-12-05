@@ -48,7 +48,7 @@ def CrossSim_Solve(
         except RuntimeError:
             solved, retry = False, True
             gamma *= 0.8
-            if gamma <= 1e-2:
+            if gamma <= 1e-4:
                 raise ValueError("Parasitic MVM solver failed to converge")
     if retry and not hide_convergence_msg:
         print(
@@ -69,7 +69,7 @@ def mvm_parasitics(vector, matrix, parasiticResistance, gamma, Verr_th):
     # Parasitic resistance
     Rp_in = Rp_out = parasiticResistance
 
-    Niters_max = 100
+    Niters_max = 1000
 
     # Initialize error and number of iterations
     Verr = 1e9
