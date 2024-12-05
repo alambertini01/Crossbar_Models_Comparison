@@ -182,12 +182,12 @@ def gamma_model(weight, x, parasiticResistance):
     beta_gm = beta_numerator / beta_denominator  # Shape: (batch_size, input_size, output_size)
     
     # Compute voltage drops and currents
-    V_a_matrix = x.unsqueeze(2)  # Shape: (batch_size, input_size, 1)
+    V_a_matrix = x.unsqueeze(2).repeat(1, 1, output_size)
     voltage_drops_gamma = alpha_gm * V_a_matrix * beta_gm  # Voltage drops across the array (not used)
     
     # Compute the current
-    current_gamma = torch.sum(alpha_gm * G.unsqueeze(0) * beta_gm * V_a_matrix, dim=1)  # Shape: (batch_size, output_size)
-    
+    # Compute the current using broadcasting
+    current_gamma = torch.sum(voltage_drops_gamma*G.unsqueeze(0).repeat(batch_size, 1, 1), dim=1)  # Shape: (32, 64)
     return current_gamma
 
 

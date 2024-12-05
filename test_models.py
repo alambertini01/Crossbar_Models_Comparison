@@ -14,7 +14,7 @@ weight = torch.rand(input_size, output_size) * 1e-3  # Random values in range [0
 
 # Calculate parasiticResistance to be three orders below 1/weight
 # Adding epsilon to avoid division by zero in extremely small weights
-parasiticResistance = 1  # Fixed value for all models
+parasiticResistance = 2  # Fixed value for all models
 
 # Create input tensor `x` filled with ones
 x = torch.rand(batch_size, input_size) * 0.5
