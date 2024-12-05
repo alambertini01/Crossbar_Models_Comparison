@@ -9,33 +9,8 @@ import os
 import seaborn as sns
 import numpy as np
 from CrossbarModels.Crossbar_Models_pytorch import jeong_model, dmr_model, gamma_model, solve_passive_model, crosssim_model, IdealModel
+from Crossbar_net import CustomNet, evaluate_model
 
-# Define the network with a selectable model function
-class CustomNet(nn.Module):
-    def __init__(self, model_function, parasiticResistance, R_lrs):
-        super(CustomNet, self).__init__()
-        self.model_function = model_function
-        self.parasiticResistance = parasiticResistance
-        self.R_lrs = R_lrs
-        # Two fully connected layers
-        self.fc1 = nn.Linear(28 * 28, 64)  # Input: 784, Hidden Layer: 64 neurons
-        self.fc2 = nn.Linear(64, 10)       # Hidden Layer: 64 neurons, Output: 10 classes
-
-        # Initialize weights to be positive
-        nn.init.uniform_(self.fc1.weight, a=0.01, b=0.1)
-        nn.init.uniform_(self.fc2.weight, a=0.01, b=0.1)
-        nn.init.constant_(self.fc1.bias, 0.01)
-        nn.init.constant_(self.fc2.bias, 0.01)
-
-    def forward(self, x):
-        # Flatten the input image
-        x = x.view(-1, 28 * 28)
-        # First fully connected layer with ReLU activation
-        x = F.relu(self.model_function(self.fc1.weight.T * (1 / self.R_lrs), x, self.parasiticResistance) / (1 / self.R_lrs) + self.fc1.bias)
-        # Output layer
-        x = self.model_function(self.fc2.weight.T * (1 / self.R_lrs), x, self.parasiticResistance) / (1 / self.R_lrs) + self.fc2.bias
-        # x = torch.clamp(x, min=-1e3, max=1e3)  # Clamp values to prevent extreme values
-        return x
 
 # Training and evaluation script
 if __name__ == "__main__":
@@ -60,15 +35,17 @@ if __name__ == "__main__":
     # Select parasitic resistance and R_lrs
     parasiticResistance = float(input("Enter parasitic resistance value: "))
     R_lrs = float(input("Enter R_lrs value: "))
+    R_hrs = float(input("Enter R_hrs value: "))
 
     # Check for GPU
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
     # Hyperparameters
-    batch_size = 128
+    batch_size = 64
     learning_rate = 0.001
     epochs = 10
+    save_checkpoint = False
 
     # Data loading and preprocessing
     transform = transforms.Compose([
@@ -83,7 +60,7 @@ if __name__ == "__main__":
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     # Initialize model, optimizer, and loss function
-    model = CustomNet(selected_model_function, parasiticResistance, R_lrs).to(device)
+    model = CustomNet(selected_model_function, parasiticResistance,R_hrs, R_lrs).to(device)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     criterion = nn.CrossEntropyLoss()
 
@@ -118,11 +95,6 @@ if __name__ == "__main__":
 
             optimizer.step()
 
-            # Enforce positive weights
-            with torch.no_grad():
-                model.fc1.weight.data = abs(model.fc1.weight.data)
-                model.fc2.weight.data = abs(model.fc2.weight.data)
-
             train_loss += loss.item()
             pred = output.argmax(dim=1, keepdim=True)
             correct += pred.eq(target.view_as(pred)).sum().item()
@@ -132,10 +104,11 @@ if __name__ == "__main__":
         train_accuracies.append(train_accuracy)
         print(f'Epoch: {epoch + 1}, Loss: {train_loss:.6f}, Accuracy: {train_accuracy:.2f}%')
 
+        if save_checkpoint:
             # Save checkpoint
-        checkpoint_path = f'{save_folder}/checkpoint_epoch_{epoch}.pth'
-        torch.save(model.state_dict(), checkpoint_path)
-        print(f'Model checkpoint saved at {checkpoint_path}')
+            checkpoint_path = f'{save_folder}/checkpoint_epoch_{epoch}.pth'
+            torch.save(model.state_dict(), checkpoint_path)
+            print(f'Model checkpoint saved at {checkpoint_path}')
 
         # Plot accuracy dynamically
         plt.clf()
@@ -151,10 +124,10 @@ if __name__ == "__main__":
         'fc1_bias': model.fc1.bias.data.cpu().numpy(),
         'fc2_weights': model.fc2.weight.data.cpu().numpy(),
         'fc2_bias': model.fc2.bias.data.cpu().numpy(),
-    }, f'{save_folder}/fc_layers_weights_positive_v2.pth')
+    }, f'{save_folder}/fc_layers_weights.pth')
 
     # Save the entire state_dict of the model
-    torch.save(model.state_dict(), f'{save_folder}/model_{selected_model_name}_positive_full_statedict.pth')
+    torch.save(model.state_dict(), f'{save_folder}/model_{selected_model_name}_full_statedict.pth')
 
     # Final plot showing the training accuracy
     plt.savefig(f'{save_folder}/training_accuracy.png')

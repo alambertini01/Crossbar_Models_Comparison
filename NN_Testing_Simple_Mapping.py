@@ -1,6 +1,4 @@
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader, Subset
 import matplotlib.pyplot as plt
@@ -11,64 +9,7 @@ import gc
 import math
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 from CrossbarModels.Crossbar_Models_pytorch import jeong_model, dmr_model, gamma_model, solve_passive_model, crosssim_model, IdealModel
-from mapping import weight_mapping, output_unmapping
-
-# Custom Layer implementation
-class CustomLayer(nn.Module):
-    def __init__(self, weight, bias, parasiticResistance, R_hrs, R_lrs, model_function, device, debug=False):
-        super(CustomLayer, self).__init__()
-        self.device = device
-        self.weight = torch.tensor(weight).to(self.device)
-        self.bias = torch.tensor(bias).to(self.device)
-        self.conductances = weight_mapping(self.weight.T,R_hrs, R_lrs)
-        self.parasiticResistance = parasiticResistance
-        self.model_function = model_function
-        self.debug = debug
-        self.currents = None
-
-    def forward(self, x):
-        Currents = self.model_function(
-            self.conductances,
-            x,
-            self.parasiticResistance
-        )
-        if self.debug:
-            self.currents = Currents.detach().cpu()
-        output = output_unmapping(self.weight.T, Currents, x, R_hrs, R_lrs)
-        return output + self.bias
-
-
-# Custom Neural Network
-class NetCustom(nn.Module):
-    def __init__(self, weights, parasiticResistance, R_hrs, R_lrs, model_function, device, debug=False):
-        super(NetCustom, self).__init__()
-        self.fc1 = CustomLayer(weights['fc1_weights'], weights['fc1_bias'], parasiticResistance, R_hrs, R_lrs, model_function, device, debug)
-        self.fc2 = CustomLayer(weights['fc2_weights'], weights['fc2_bias'], parasiticResistance, R_hrs, R_lrs, model_function, device, debug)
-
-    def forward(self, x):
-        x = x.view(-1, 28 * 28)
-        x = F.relu(self.fc1(x))
-        x = self.fc2(x)
-        return x
-
-
-# Evaluate Model
-def evaluate_model(model, test_loader, device):
-    model.to(device)
-    model.eval()
-    correct = 0
-    all_preds, all_targets = [], []
-    with torch.no_grad():
-        for data, target in test_loader:
-            data, target = data.to(device), target.to(device)
-            output = model(data)
-            pred = output.argmax(dim=1, keepdim=True)
-            all_preds.extend(pred.cpu().numpy().flatten())
-            all_targets.extend(target.cpu().numpy().flatten())
-            correct += pred.eq(target.view_as(pred)).sum().item()
-    accuracy = 100. * correct / len(test_loader.dataset)
-    return accuracy, all_preds, all_targets
-
+from Crossbar_net import CustomNet, evaluate_model
 
 
 # Main Function
@@ -79,16 +20,18 @@ if __name__ == '__main__':
     subset_indices = torch.arange(60)
 
     # Crossbar parameters
-    R_lrs = 1e3  
-    R_hrs = 1e6
-    parasitic_resistances = torch.arange(0.0001, 3.1, 0.1).tolist()
+    R_lrs = 1e3 
+    R_hrs = 1e8
+    parasitic_resistances = torch.arange(0.0001, 2.1, 0.1).tolist()
+    bits=0
 
     # Enabled models for the accuracy test
     model_functions = [crosssim_model, IdealModel, dmr_model, gamma_model]
 
     # Plotting parameters
-    debug_plot = True  # Set to True to enable debugging plots
+    debug_plot = False  # Set to True to enable debugging plots
     debug_index = 0  # Set the index of the currents to plot for debugging
+    bias_correction=True
     selected_model = model_functions[0]  # Change this to select a different model for confusion matrix plotting
 
     # Device setup
@@ -147,11 +90,6 @@ if __name__ == '__main__':
         'IdealModel': 'black'
     }
 
-    # Ideal model evaluation (used for normalization)
-    ideal_model = NetCustom(weights, parasiticResistance=0, R_hrs=R_hrs, R_lrs=R_lrs, model_function=IdealModel, device=device).to(device)
-    ideal_accuracy, _, _ = evaluate_model(ideal_model, small_test_loader, device)
-    print(f"Accuracy of ideal model: {ideal_accuracy:.2f}%")
-
     custom_accuracies = {model_function.__name__: [] for model_function in model_functions}
     confusion_data = []
 
@@ -159,7 +97,7 @@ if __name__ == '__main__':
         if debug_plot:
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
         for model_function in model_functions:
-            model_custom = NetCustom(weights, parasiticResistance, R_hrs, R_lrs, model_function, device=device, debug=debug_plot).to(device)
+            model_custom = CustomNet(weights, parasiticResistance, R_hrs, R_lrs, model_function, device=device, debug=debug_plot, bits=bits, bias_correction=bias_correction)
             custom_accuracy, custom_preds, custom_targets = evaluate_model(model_custom, small_test_loader, device)
             custom_accuracies[model_function.__name__].append(custom_accuracy)
             if model_function == selected_model:
@@ -217,11 +155,6 @@ if __name__ == '__main__':
     num_rows = math.ceil(num_confusions / 4)
     fig, axes = plt.subplots(num_rows, 4, figsize=(20, 5 * num_rows))
     axes = axes.ravel()
-    # Plot confusion matrix for ideal model
-    cm = confusion_matrix(_, _, labels=sorted(set(_) | set(_)))
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=sorted(set(_) | set(_)))
-    disp.plot(cmap=plt.cm.Blues, values_format='d', ax=axes[0])
-    axes[0].set_title("Confusion Matrix: Ideal Model")
     # Plot confusion matrices for selected custom models
     for i, (custom_preds, custom_targets, title) in enumerate(confusion_data, start=1):
         if i < len(axes):
