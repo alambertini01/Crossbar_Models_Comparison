@@ -21,6 +21,9 @@ from CrossbarModels.Functions.NonLinear import resistance_array_to_x
 from CrossbarModels.Functions.NonLinear import calculate_resistance
 #Import the Crossbar Models
 from CrossbarModels.Crossbar_Models import *
+from CrossbarModels.Crossbar_Models_pytorch import gamma_model, dmr_model, jeong_model, crosssim_model
+
+
 
 # Use this script to compare the performance (time and accuracy) of different parasitc resistance corsbar models
 
@@ -34,12 +37,12 @@ input,output = (784,64)
 Models = [
     JeongModel("Jeong"),
     JeongModel_avg("Jeong_avg"),
-    JeongModel_avgv2("Jeong_new"),
+    JeongModel_avgv2("Jeong_torch"),
     IdealModel("Ideal"),
     DMRModel("DMR_old"),
     DMRModel_acc("DMR"),
-    DMRModel_new("DMR_new"),
-    GammaModel("Gamma_old"),
+    DMRModel_new("DMR_torch"),
+    GammaModel("Gamma_torch"),
     GammaModel_acc("Gamma_acc_v1"),
     GammaModel_acc_v2("Gamma"),
     CrossSimModel("CrossSim_ref"),
@@ -53,7 +56,7 @@ Models = [
     CrossSimModel("CrossSim8",Verr_th=1e-7),
     CrossSimModel("CrossSim9",Verr_th=1e-8),
     CrossSimModel("CrossSim10",Verr_th=1e-9),
-    CrossSimModel("CrossSim11",Verr_th=1e-10),
+    CrossSimModel("CrossSim_torch",Verr_th=1e-10),
     LTSpiceModel("LTSpice"),
     NgSpiceModel("NgSpice"),
     NgSpiceNonLinearModel("NgSpiceNonLinear"),
@@ -61,8 +64,14 @@ Models = [
     MemtorchModelPython("Memtorch_python")
 ]
 
+new_model_functions = {
+    "Gamma_torch": gamma_model,
+    "DMR_torch": dmr_model,
+    "Jeong_torch": jeong_model,
+    "CrossSim_torch" : crosssim_model
+}
 
-enabled_models = [ "Ideal","Jeong","DMR","Gamma","CrossSim3"]
+enabled_models = [ "Ideal","Jeong","DMR","Gamma","CrossSim2","Gamma_torch", "DMR_torch","Jeong_torch","CrossSim_torch"]
 # enabled_models = [model.name for model in Models]
 # enabled_models = [ "Ideal","Jeong_avgv2","DMR","Gamma","CrossSim1","CrossSim2","CrossSim3","CrossSim4","CrossSim5","CrossSim6","CrossSim7","CrossSim8","CrossSim9","CrossSim10","Memtorch","NgSpice"]
 
@@ -192,15 +201,54 @@ for m in range(memorySize):
 
             # Simulate the crossbar with each model
             for index, model in enumerate(Models):
-                if model.name in enabled_models:  # Check if the model is enabled
-                    index = enabled_models.index(model.name)
-                    NonLinear_params = {'X': X[z,m,v], 'S': S[z,m,v]} if model.name == 'NgSpiceNonLinear' else {'R_lrs': R_lrs, 'MW':memoryWindow[m]}
+                if model.name in enabled_models:
+                    model_idx = enabled_models.index(model.name)
+                    
+                    # Prepare inputs for both old and new style models
+                    # Old models use: model.calculate(R, parasiticResistance, Potential, ...)
+                    # New models use: function(weight, x, parasiticResistance)
+                    
+                    # Convert R to weight = 1/R for new models
+                    # R[z, m, v] is (input, output)
+                    # For batch_size=1: weight should be (1, input, output)
+                    weight_np = 1.0 / R[z, m, v]
+                    weight_tensor = torch.tensor(weight_np, dtype=torch.float32) # shape (1, input, output)
+                    
+                    # Potential is of shape (input,). For batch_size=1, x should be (1, input)
+                    x_np = Potential[np.newaxis, :]  # shape (1, input)
+                    x_tensor = torch.tensor(x_np, dtype=torch.float32)
+                    
+                    # Check if model name corresponds to a new-style function
+                    if model.name in new_model_functions:
+                        # Call the new PyTorch function
+                        start_time = time.perf_counter()
+                        with torch.no_grad():
+                            out_curr_torch = new_model_functions[model.name](weight_tensor, x_tensor, parasiticResistance[z])
+                        end_time = time.perf_counter()
+                        
+                        # v_drops_torch: (1, input, output)
+                        # out_curr_torch: (1, output)
+                        # Convert back to numpy and remove batch dimension
 
-                    start_time = time.perf_counter()
-                    voltage_drops[:, :, z, m, index], output_currents[:, z, m, index] = model.calculate(R[z, m, v], parasiticResistance[z], Potential, **NonLinear_params)
-                    # output_currents[:, z, m, index] = np.cumsum(voltage_drops[:,:,z,m, index]*np.reciprocal(R[z,m,v]),axis=0)[input-1,:]
-                    end_time = time.perf_counter()
-                    simulation_times[index] += (end_time - start_time)/totalIterations
+                        out_curr_np = out_curr_torch.squeeze(0).numpy() # (output,)
+
+                        output_currents[:, z, m, model_idx] = out_curr_np
+                        
+                        simulation_times[model_idx] += (end_time - start_time)/totalIterations
+                    
+                    else:
+                        # Old model class with calculate function
+                        # NonLinear_params needed only for NgSpiceNonLinear as shown in original code
+                        NonLinear_params = {'X': X[z,m,v], 'S': S[z,m,v]} if model.name == 'NgSpiceNonLinear' else {'R_lrs': R_lrs, 'MW':memoryWindow[m]}
+                        
+                        start_time = time.perf_counter()
+                        v_drop, out_curr = model.calculate(R[z, m, v], parasiticResistance[z], Potential, **NonLinear_params)
+                        end_time = time.perf_counter()
+                        
+                        voltage_drops[:, :, z, m, model_idx] = v_drop
+                        output_currents[:, z, m, model_idx] = out_curr
+                        
+                        simulation_times[model_idx] += (end_time - start_time)/totalIterations
             
             # Calculate the error metrics
             for index, model in enumerate(enabled_models[:-1]):
