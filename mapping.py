@@ -1,4 +1,5 @@
 import torch
+from torch.autograd import Variable
 
 def weight_mapping(weights, r_hrs, r_lrs):
     """Map weights to conductances.
@@ -17,7 +18,7 @@ def output_unmapping(weights, y_mapped, x, r_hrs, r_lrs):
     weight_max = torch.max(weights)
     k = (1 / r_lrs - 1 / r_hrs) / (weight_max - weight_min)
     c = ((-weight_min) * (1 / r_lrs - 1 / r_hrs) / (weight_max - weight_min)) + (1 / r_hrs)
-    x_sum = x.sum()
+    x_sum = x.sum(dim=1, keepdim=True)
     return (y_mapped - c * x_sum) / k
 
 

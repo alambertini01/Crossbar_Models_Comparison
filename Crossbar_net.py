@@ -9,15 +9,11 @@ class CustomLayer(nn.Module):
     def __init__(self, weight, bias, parasiticResistance, R_hrs, R_lrs, model_function, device, debug=False, bits=0, bias_correction=False):
         super(CustomLayer, self).__init__()
         self.device = device
-        self.weight = torch.tensor(weight).to(self.device)
-        self.bias = torch.tensor(bias).to(self.device)
+        self.weight = nn.Parameter(weight.clone().detach().to(self.device))
+        self.bias = nn.Parameter(bias.clone().detach().to(self.device))
         self.R_hrs = R_hrs
         self.R_lrs = R_lrs
         self.bits = bits
-        if bits and model_function != IdealModel:
-            self.conductances = quantization(weight_mapping(self.weight.T,R_hrs, R_lrs), R_lrs, R_hrs, bits)
-        else:
-            self.conductances = weight_mapping(self.weight.T,R_hrs, R_lrs)
         self.parasiticResistance = parasiticResistance
         self.model_function = model_function
         self.debug = debug
@@ -26,14 +22,18 @@ class CustomLayer(nn.Module):
 
 
     def forward(self, x):
+        if self.bits and self.model_function != IdealModel:
+            conductances = quantization(weight_mapping(self.weight, self.R_hrs, self.R_lrs), self.R_lrs, self.R_hrs, self.bits)
+        else:
+            conductances = weight_mapping(self.weight, self.R_hrs, self.R_lrs)
         Currents = self.model_function(
-            self.conductances,
+            conductances,
             x,
             self.parasiticResistance
         )
         if self.bias_correction:
             IdealCurrents = IdealModel(
-                self.conductances,
+                conductances,
                 x,
                 self.parasiticResistance
             )

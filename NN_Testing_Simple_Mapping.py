@@ -21,17 +21,17 @@ if __name__ == '__main__':
 
     # Crossbar parameters
     R_lrs = 1e3 
-    R_hrs = 1e8
+    R_hrs = 5e6
     parasitic_resistances = torch.arange(0.0001, 2.1, 0.1).tolist()
     bits=0
 
     # Enabled models for the accuracy test
-    model_functions = [crosssim_model, IdealModel, dmr_model, gamma_model]
+    model_functions = [crosssim_model, jeong_model, dmr_model, gamma_model, IdealModel]
 
     # Plotting parameters
     debug_plot = False  # Set to True to enable debugging plots
     debug_index = 0  # Set the index of the currents to plot for debugging
-    bias_correction=True
+    bias_correction=False
     selected_model = model_functions[0]  # Change this to select a different model for confusion matrix plotting
 
     # Device setup
@@ -56,7 +56,7 @@ if __name__ == '__main__':
     selected_rpar_folder = available_rpar_folders[rpar_choice]
     # Load weights and biases from the selected model's folder
     folder_path = f"{trained_models_folder}/{selected_model_name}/{selected_rpar_folder}"
-    weights_path = f"{folder_path}/fc_layers_weights_positive_v2.pth"
+    weights_path = f"{folder_path}/fc_layers_weights.pth"
     # Check if the model exists
     if not os.path.exists(weights_path):
         print("The specified weights file does not exist. Please ensure the model is trained and saved correctly.")

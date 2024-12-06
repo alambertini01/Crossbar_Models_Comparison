@@ -9,7 +9,7 @@ import os
 import seaborn as sns
 import numpy as np
 from CrossbarModels.Crossbar_Models_pytorch import jeong_model, dmr_model, gamma_model, solve_passive_model, crosssim_model, IdealModel
-from Crossbar_net import CustomNet, evaluate_model
+from Crossbar_net import CustomNet, CustomLayer, evaluate_model
 
 
 # Training and evaluation script
@@ -44,7 +44,7 @@ if __name__ == "__main__":
     # Hyperparameters
     batch_size = 64
     learning_rate = 0.001
-    epochs = 10
+    epochs = 20
     save_checkpoint = False
 
     # Data loading and preprocessing
@@ -60,12 +60,18 @@ if __name__ == "__main__":
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     # Initialize model, optimizer, and loss function
-    model = CustomNet(selected_model_function, parasiticResistance,R_hrs, R_lrs).to(device)
+    weights = {
+        'fc1_weights': torch.randn(28 * 28,64),
+        'fc1_bias': torch.randn(64),
+        'fc2_weights': torch.randn(64, 10),
+        'fc2_bias': torch.randn(10)
+    }
+    model = CustomNet(weights, parasiticResistance, R_hrs, R_lrs, selected_model_function, device).to(device)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     criterion = nn.CrossEntropyLoss()
-
+    
     # Save the trained weights
-    save_folder = f'Models/Trained/{selected_model_name}/Rpar_{parasiticResistance}'
+    save_folder = f'TrainedModels/{selected_model_name}/Rpar{parasiticResistance}__LRS{R_lrs}__HRS{R_hrs}'
     if not os.path.exists(save_folder):
         os.makedirs(save_folder)
 
@@ -86,9 +92,9 @@ if __name__ == "__main__":
 
             # Backward pass
             optimizer.zero_grad()
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            # # Print gradients for debugging
+            loss.backward(retain_graph=True)
+            torch.nn.utils.clip_grad_norm_([weights['fc1_weights'], weights['fc1_bias'], weights['fc2_weights'], weights['fc2_bias']], max_norm=1.0)
+            # Print gradients for debugging
             # for name, param in model.named_parameters():
             #     if param.grad is not None:
             #         print(f'Gradient for {name}: {param.grad.norm()}')
@@ -118,12 +124,11 @@ if __name__ == "__main__":
         plt.title('Training Accuracy Over Epochs')
         plt.pause(0.1)
 
-
     torch.save({
-        'fc1_weights': model.fc1.weight.data.cpu().numpy(),
-        'fc1_bias': model.fc1.bias.data.cpu().numpy(),
-        'fc2_weights': model.fc2.weight.data.cpu().numpy(),
-        'fc2_bias': model.fc2.bias.data.cpu().numpy(),
+        'fc1_weights': model.fc1.weight.data.cpu(),
+        'fc1_bias': model.fc1.bias.data.cpu(),
+        'fc2_weights': model.fc2.weight.data.cpu(),
+        'fc2_bias': model.fc2.bias.data.cpu(),
     }, f'{save_folder}/fc_layers_weights.pth')
 
     # Save the entire state_dict of the model
@@ -131,25 +136,11 @@ if __name__ == "__main__":
 
     # Final plot showing the training accuracy
     plt.savefig(f'{save_folder}/training_accuracy.png')
-    plt.show()
+    plt.close()
 
-    # Evaluation loop
-    model.eval()
-    test_loss = 0
-    correct = 0
-    with torch.no_grad():
-        for data, target in test_loader:
-            data, target = data.to(device), target.to(device)
-
-            # Forward pass
-            output = model(data)
-            test_loss += criterion(output, target).item()
-            pred = output.argmax(dim=1, keepdim=True)
-            correct += pred.eq(target.view_as(pred)).sum().item()
-
-    test_loss /= len(test_loader.dataset)
-    test_accuracy = 100. * correct / len(test_loader.dataset)
-    print(f'\nTest Loss: {test_loss:.6f}, Test Accuracy: {test_accuracy:.2f}%')
+    # Evaluation
+    accuracy, all_preds, all_targets = evaluate_model(model, test_loader, device)
+    print(f'Test Accuracy: {accuracy:.2f}%')
 
     # Save heatmaps of weights and biases
     fig, axes = plt.subplots(2, 2, figsize=(10, 8))
@@ -163,4 +154,4 @@ if __name__ == "__main__":
     axes[1, 1].set_title('FC2 Bias')
     plt.tight_layout()
     plt.savefig(f'{save_folder}/weights_biases_heatmap.png')
-    plt.close(fig)
+    plt.show(fig)
