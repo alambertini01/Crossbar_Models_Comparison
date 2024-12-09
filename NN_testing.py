@@ -10,7 +10,7 @@ import math
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 import csv
 import numpy as np
-from mpl_toolkits.mplot3d import Axes3D  # Ensure this import is present at the top of your script
+from mpl_toolkits.mplot3d import Axes3D
 
 from CrossbarModels.Crossbar_Models_pytorch import jeong_model, dmr_model, gamma_model, solve_passive_model, crosssim_model, IdealModel
 from Crossbar_net import CustomNet, evaluate_model
@@ -22,12 +22,16 @@ if __name__ == '__main__':
 
     # Primary fixed parameters
     R_lrs = 1e3
-    parasitic_resistances = torch.arange(0.0001, 1.01, 0.05).tolist()
-    model_functions = [ IdealModel, crosssim_model]
-    bias_correction = True
-    debug_plot = True
+    parasitic_resistances = torch.arange(0.0001, 10.01, 0.5).tolist()
+    max_array_size = 784
+    model_functions = [ IdealModel, crosssim_model, jeong_model, gamma_model, dmr_model ]
+    bias_correction = False
+    debug_plot = False
     debug_index = 0
-    plot_confusion = False  # User decides if confusion maps should be plotted
+    plot_confusion = False
+
+    batch_size=64
+    test_samples = 100
 
     # Parameters to potentially sweep
     #R_hrs_values = torch.linspace(10000, 200000, steps=20).tolist()
@@ -94,18 +98,16 @@ if __name__ == '__main__':
         transforms.Lambda(lambda x: x / 2)  # Scale to [0,0.5]
     ])
     test_dataset = datasets.MNIST('./data', train=False, download=True, transform=transform)
-    small_test_dataset = Subset(test_dataset, torch.arange(100))
-    small_test_loader = DataLoader(small_test_dataset, batch_size=64, shuffle=False)
+    small_test_dataset = Subset(test_dataset, torch.arange(test_samples))
+    small_test_loader = DataLoader(small_test_dataset, batch_size=batch_size, shuffle=False)
 
     # Results folder
     end = datetime.datetime.now(pytz.timezone('Europe/Rome'))
     results_folder = f'Results/{end.year}{end.month}{end.day}_{end.hour}_{end.minute}_NN_benchmark'
     os.makedirs(results_folder, exist_ok=True)
 
+
     # *************** Run Evaluations ***************
-    # custom_accuracies structure:
-    # If no second sweep: {model_name: [accuracies]}
-    # If second sweep: {model_name: [[acc_for_param1, acc_for_param2, ...], ...]} forming a 2D matrix
 
     # Colors for models
     colors = {
@@ -155,7 +157,6 @@ if __name__ == '__main__':
                 for model_function in model_functions:
                     # Print progress
                     current_iter += 1
-                    print(f"Processing {current_iter}/{total_iterations} | Rpar={pr}, {sweeping_param+'='+str(pv) if sweeping_param else ''}, model={model_function.__name__}")
 
                     model_custom = CustomNet(
                         weights,
@@ -166,12 +167,19 @@ if __name__ == '__main__':
                         device=device,
                         debug=debug_plot,
                         bits=current_bits,
-                        correction=bias_correction
+                        correction=bias_correction,
+                        max_array_size=max_array_size
                     )
 
                     acc, preds, targets = evaluate_model(model_custom, small_test_loader, device)
                     custom_accuracies[model_function.__name__][i, j] = acc
 
+                    print(f"Processing {current_iter}/{total_iterations} | "
+                        f"Rpar={pr:.2f}, "
+                        f"{sweeping_param + '=' + str(pv) if sweeping_param else ''}, "
+                        f"model={model_function.__name__}, "
+                        f"acc={acc:.2f}")
+                    
                     if sweeping_param:
                         writer.writerow([pr, sweeping_param, pv, model_function.__name__, acc])
                     else:
@@ -195,7 +203,7 @@ if __name__ == '__main__':
                             color=color,
                             label=model_function.__name__
                         )
-                        if bias_correction:
+                        if bias_correction and model_function != IdealModel:
                             # Plotting Layer 1 Currents
                             ax1.plot(
                                 model_custom.fc1.currents_corrected[debug_index].numpy(),

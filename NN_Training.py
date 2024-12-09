@@ -9,7 +9,7 @@ import os
 import seaborn as sns
 import numpy as np
 from CrossbarModels.Crossbar_Models_pytorch import jeong_model, dmr_model, gamma_model, solve_passive_model, crosssim_model, IdealModel
-from Crossbar_net import CustomNet, CustomLayer, evaluate_model
+from Crossbar_net import CustomNet, evaluate_model
 
 
 # Model selection
@@ -34,6 +34,7 @@ selected_model_function = available_models[selected_model_name]
 parasiticResistance = float(input("Enter parasitic resistance value: "))
 R_lrs = float(input("Enter R_lrs value: "))
 R_hrs = float(input("Enter R_hrs value: "))
+max_array_size = int(input("Enter max_array_size value: "))
 
 # Check for GPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -67,7 +68,8 @@ weights = {
 }
 
 # Initialize the model
-model = CustomNet(weights, parasiticResistance, R_hrs, R_lrs, selected_model_function, device).to(device)
+model = CustomNet(weights, parasiticResistance, R_hrs, R_lrs, selected_model_function, device, 
+                  debug=False, bits=0, correction=False, max_array_size=max_array_size).to(device)
 
 # Initialize optimizer and loss function
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
