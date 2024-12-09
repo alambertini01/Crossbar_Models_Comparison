@@ -3,10 +3,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 from mapping import weight_mapping, output_unmapping, quantization
 from CrossbarModels.Crossbar_Models_pytorch import IdealModel
+from plot_utils import plot_data
 
 # Custom Layer implementation
 class CustomLayer(nn.Module):
-    def __init__(self, weight, bias, parasiticResistance, R_hrs, R_lrs, model_function, device, debug=False, bits=0, bias_correction=False):
+    def __init__(self, weight, bias, parasiticResistance, R_hrs, R_lrs, model_function, device, debug=False, bits=0, correction=False):
         super(CustomLayer, self).__init__()
         self.device = device
         self.weight = nn.Parameter(weight.clone().detach().to(self.device))
@@ -18,41 +19,44 @@ class CustomLayer(nn.Module):
         self.model_function = model_function
         self.debug = debug
         self.currents = None
-        self.bias_correction = bias_correction
+        self.currents_corrected = None
+        self.correction = correction
 
 
     def forward(self, x):
+
+        if self.model_function == IdealModel and not self.debug:
+            return torch.matmul(x.unsqueeze(0) if len(x.shape) == 1 else x, self.weight)+ self.bias
+        
         if self.bits and self.model_function != IdealModel:
             conductances = quantization(weight_mapping(self.weight, self.R_hrs, self.R_lrs), self.R_lrs, self.R_hrs, self.bits)
         else:
             conductances = weight_mapping(self.weight, self.R_hrs, self.R_lrs)
-        Currents = self.model_function(
-            conductances,
-            x,
-            self.parasiticResistance
-        )
-        if self.bias_correction:
-            IdealCurrents = IdealModel(
-                conductances,
-                x,
-                self.parasiticResistance
-            )
-            correction = torch.mean(Currents,1)/torch.mean(IdealCurrents,1)
+
+        Currents = self.model_function(conductances,x,self.parasiticResistance)
+
         if self.debug:
             self.currents = Currents.detach().cpu()
+
+        if self.correction and self.model_function != IdealModel:
+            IdealCurrents = IdealModel(conductances,x,self.parasiticResistance)
+            correction_coefficient = (torch.max(IdealCurrents, dim=1).values - torch.min(IdealCurrents, dim=1).values) / (torch.max(Currents, dim=1).values - torch.min(Currents, dim=1).values + 1e-8)
+            Currents = (Currents-(torch.mean(Currents,1).unsqueeze(1))) * correction_coefficient.unsqueeze(1) + (torch.mean(IdealCurrents,1)).unsqueeze(1)
+
+        if self.debug:
+            self.currents_corrected = Currents.detach().cpu()
+
         output = output_unmapping(self.weight.T, Currents, x, self.R_hrs, self.R_lrs)
-        if self.bias_correction:
-            return output + self.bias.repeat(output.shape[0], 1) * correction.unsqueeze(1).repeat(1, self.bias.shape[0])
-        else:
-            return output + self.bias
+
+        return output + self.bias
         
 
 # Custom Neural Network
 class CustomNet(nn.Module):
-    def __init__(self, weights, parasiticResistance, R_hrs, R_lrs, model_function, device, debug=False, bits=0, bias_correction=False):
+    def __init__(self, weights, parasiticResistance, R_hrs, R_lrs, model_function, device, debug=False, bits=0, correction=False):
         super(CustomNet, self).__init__()
-        self.fc1 = CustomLayer(weights['fc1_weights'], weights['fc1_bias'], parasiticResistance, R_hrs, R_lrs, model_function, device, debug, bits, bias_correction)
-        self.fc2 = CustomLayer(weights['fc2_weights'], weights['fc2_bias'], parasiticResistance, R_hrs, R_lrs, model_function, device, debug, bits, bias_correction)
+        self.fc1 = CustomLayer(weights['fc1_weights'], weights['fc1_bias'], parasiticResistance, R_hrs, R_lrs, model_function, device, debug, bits, correction)
+        self.fc2 = CustomLayer(weights['fc2_weights'], weights['fc2_bias'], parasiticResistance, R_hrs, R_lrs, model_function, device, debug, bits, correction)
 
     def forward(self, x):
         x = x.view(-1, 28 * 28)

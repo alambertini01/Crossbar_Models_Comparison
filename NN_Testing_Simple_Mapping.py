@@ -21,12 +21,12 @@ if __name__ == '__main__':
 
     # Crossbar parameters
     R_lrs = 1e3 
-    R_hrs = 5e6
+    R_hrs = 1e5
     parasitic_resistances = torch.arange(0.0001, 2.1, 0.1).tolist()
     bits=0
 
     # Enabled models for the accuracy test
-    model_functions = [crosssim_model, jeong_model, dmr_model, gamma_model, IdealModel]
+    model_functions = [crosssim_model]
 
     # Plotting parameters
     debug_plot = False  # Set to True to enable debugging plots
@@ -39,7 +39,7 @@ if __name__ == '__main__':
     print(f"Using device: {device}")
 
     # List available trained models
-    trained_models_folder = "Models/Trained"
+    trained_models_folder = "TrainedModels"
     available_models = [d for d in os.listdir(trained_models_folder) if os.path.isdir(os.path.join(trained_models_folder, d))]
     print("Available trained models:")
     for i, model_name in enumerate(available_models):
@@ -97,7 +97,7 @@ if __name__ == '__main__':
         if debug_plot:
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
         for model_function in model_functions:
-            model_custom = CustomNet(weights, parasiticResistance, R_hrs, R_lrs, model_function, device=device, debug=debug_plot, bits=bits, bias_correction=bias_correction)
+            model_custom = CustomNet(weights, parasiticResistance, R_hrs, R_lrs, model_function, device=device, debug=debug_plot, bits=bits, correction=bias_correction)
             custom_accuracy, custom_preds, custom_targets = evaluate_model(model_custom, small_test_loader, device)
             custom_accuracies[model_function.__name__].append(custom_accuracy)
             if model_function == selected_model:
