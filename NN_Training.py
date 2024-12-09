@@ -43,7 +43,7 @@ print(f"Using device: {device}")
 # Hyperparameters
 batch_size = 64
 learning_rate = 0.001
-epochs = 20
+epochs = 10
 save_checkpoint = False
 non_negative = False
 

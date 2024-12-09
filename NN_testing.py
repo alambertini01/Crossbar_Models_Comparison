@@ -23,8 +23,8 @@ if __name__ == '__main__':
     # Primary fixed parameters
     R_lrs = 1e3
     parasitic_resistances = torch.arange(0.0001, 10.01, 0.5).tolist()
-    max_array_size = 784
-    model_functions = [ IdealModel, crosssim_model, jeong_model, gamma_model, dmr_model ]
+    max_array_size = 64
+    model_functions = [ IdealModel, crosssim_model, dmr_model]
     bias_correction = False
     debug_plot = False
     debug_index = 0
