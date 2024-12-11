@@ -190,19 +190,17 @@ def gamma_model(weight, x, parasiticResistance):
 
 
 
-
 # Memtorch solve_passive model
 # Uses memtorch_bindings to solve passive networks and obtain voltage drops and currents
 def solve_passive_model(weight, x, parasiticResistance):
     return memtorch_bindings.solve_passive(
         weight,
         x,
-        torch.zeros(weight.shape[0]),
+        torch.zeros(weight.shape[1]),
         parasiticResistance,
         parasiticResistance,
         n_input_batches=x.shape[0]
     )
-
 
 
 # Ideal model implementation
