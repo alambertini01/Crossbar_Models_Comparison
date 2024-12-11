@@ -76,7 +76,7 @@ optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 criterion = nn.CrossEntropyLoss()
 
 # Save the trained weights
-save_folder = f'TrainedModels/{selected_model_name}/Rpar{parasiticResistance}__LRS{R_lrs}__HRS{R_hrs}'
+save_folder = f'TrainedModels/{selected_model_name}/Rpar{parasiticResistance}__LRS{R_lrs}__HRS{R_hrs}__Size{max_array_size}'
 if not os.path.exists(save_folder):
     os.makedirs(save_folder)
 
