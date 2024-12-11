@@ -31,7 +31,7 @@ from CrossbarModels.Crossbar_Models_pytorch import gamma_model, dmr_model, jeong
 ############################ PARAMETERS ##############################
 
 # Dimensions of the crossbar
-input,output = (784,64)
+input,output = (64,64)
 
 # Initialize each model instance
 Models = [
@@ -41,6 +41,7 @@ Models = [
     IdealModel("Ideal"),
     DMRModel("DMR_old"),
     DMRModel_acc("DMR"),
+    DMRModel_new("DMR_new"),
     DMRModel_new("DMR_torch"),
     GammaModel("Gamma_torch"),
     GammaModel_acc("Gamma_acc_v1"),
@@ -71,7 +72,7 @@ new_model_functions = {
     "CrossSim_torch" : crosssim_model
 }
 
-enabled_models = [ "Ideal","Jeong","DMR","Gamma","CrossSim2","Gamma_torch", "DMR_torch","Jeong_torch","CrossSim_torch"]
+enabled_models = [ "Ideal","Jeong","DMR","Gamma","CrossSim2","DMR_new"]
 # enabled_models = [model.name for model in Models]
 # enabled_models = [ "Ideal","Jeong_avgv2","DMR","Gamma","CrossSim1","CrossSim2","CrossSim3","CrossSim4","CrossSim5","CrossSim6","CrossSim7","CrossSim8","CrossSim9","CrossSim10","Memtorch","NgSpice"]
 
@@ -86,10 +87,10 @@ parasiticResistance = np.array([1])
 
 # Memory window (ratio between Hrs and Lrs)
 memoryWindow = np.arange(5, 101, 5)
-memoryWindow = np.array([2])
+memoryWindow = np.array([100])
 
 # Input voltages parameters
-v_On_percentage = 10
+v_On_percentage = 50
 population = [0.5, 0.0]
 
 # Metric type (2=Current*Times, 1=Current, 0=Voltage)
@@ -97,7 +98,7 @@ Metric_type = 1
 
 # Variability parameters
 v_flag = 1
-v_size = 2
+v_size = 10
 
 
 
@@ -659,7 +660,7 @@ if scatter_plot:
     scatter = ax.scatter(
         plot_times,
         plot_Metric,
-        c=[colors[crosssim_indices[1] % len(colors)] if i in crosssim_indices else colors[(i + 1) % len(colors)]
+        c=[colors[crosssim_indices[0] % len(colors)] if i in crosssim_indices else colors[(i + 1) % len(colors)]
            for i in range(len(plot_models))],
         s=120,
         marker='o',
@@ -669,7 +670,7 @@ if scatter_plot:
     # Plot variance bars
     for i, (x, y, var) in enumerate(zip(plot_times, plot_Metric, plot_variance)):
         ax.errorbar(x, y, yerr=np.sqrt(var), fmt='o',
-                    color=colors[crosssim_indices[1] % len(colors)] if i in crosssim_indices else colors[(i + 1) % len(colors)], capsize=5)
+                    color=colors[crosssim_indices[0] % len(colors)] if i in crosssim_indices else colors[(i + 1) % len(colors)], capsize=5)
     # # Annotate non-CrossSim models
     # for i, model in enumerate(plot_models):
     #     if not model.startswith("CrossSim"):

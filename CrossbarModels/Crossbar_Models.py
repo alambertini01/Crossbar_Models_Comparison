@@ -188,38 +188,72 @@ class DMRModel_acc(CrossbarModel):
 
         return voltage_drops_dmr, current_dmr
     
-
 class DMRModel_new(CrossbarModel):
     def calculate(self, R, parasiticResistance, Potential, **kwargs):
-
-        input, output = R.shape
+        input_size, output_size = R.shape
         G = np.reciprocal(R)
         g_bit = 1/parasiticResistance
         g_word = 1/parasiticResistance
 
-        a_dmr = [0]*input
-        b_dmr = [0]*output
-        
-        gAverageRow = G.mean(1)
-        gAverageCol = G.mean(0)
+        # Precompute means
+        gAverageRow = G.mean(axis=1)  # shape: (input_size,)
+        gAverageCol = G.mean(axis=0)  # shape: (output_size,)
 
-        weights = np.arange(input, 0, -1)  # [input, input-1, ..., 1]
-        Summation_bit = np.sum(weights * gAverageRow)
-        # For Summation1, we need cumulative sum up to j for each j
-        indices = np.arange(input)
-        Summation1 = indices * np.cumsum(gAverageRow) - np.cumsum(indices * gAverageRow)
-        a_dmr = (1 + Summation1/g_bit)/(1 + Summation_bit/g_bit)
-        
-        # Creation of the diag matrices A and B with the vector a and b
+        # Precompute summation_bit (constant for all j)
+        # Summation_bit = sum_{k=0}^{input_size-1} (input_size - k)*gAverageRow[k]
+        # = dot((input_size - np.arange(input_size)), gAverageRow)
+        Summation_bit = (input_size - np.arange(input_size)) @ gAverageRow
+
+        # Prefix sums for gAverageRow
+        # prefix_sum_gAR[i] = sum of gAverageRow[0:i]
+        prefix_sum_gAR = np.concatenate(([0], np.cumsum(gAverageRow)))
+        # prefix_sum_k_gAR[i] = sum of k*gAverageRow[k] for k in [0:i-1]
+        prefix_sum_k_gAR = np.concatenate(([0], np.cumsum(np.arange(input_size)*gAverageRow)))
+
+        # Compute Summation1 for all j simultaneously:
+        # Summation1_j = sum_{k=0}^{j-1} (j-k)*gAverageRow[k]
+        # = j*sum_{k=0}^{j-1} gAverageRow[k] - sum_{k=0}^{j-1} k*gAverageRow[k]
+        # = j*prefix_sum_gAR[j] - prefix_sum_k_gAR[j]
+        j_indices = np.arange(input_size)
+        Summation1_array = j_indices * prefix_sum_gAR[j_indices] - prefix_sum_k_gAR[j_indices]
+
+        # a_dmr[j] = (1 + Summation1_j/g_bit) / (1 + Summation_bit/g_bit)
+        a_dmr = (1 + Summation1_array/g_bit) / (1 + Summation_bit/g_bit)
+
+        # Precompute summation_word (constant for all j)
+        # Summation_word = sum_{k=1}^{output_size} k*gAverageCol[k-1]
+        # = sum_{k=0}^{output_size-1} (k+1)*gAverageCol[k]
+        Summation_word = (np.arange(1, output_size+1) @ gAverageCol)
+
+        # Prefix sums for gAverageCol
+        prefix_sum_gAC = np.concatenate(([0], np.cumsum(gAverageCol)))
+        prefix_sum_k_gAC = np.concatenate(([0], np.cumsum(np.arange(output_size)*gAverageCol)))
+
+        # Compute Summation2 for all j simultaneously:
+        # Summation2_j = sum_{k=j}^{output_size-1} (k-j)*gAverageCol[k]
+        # = (sum_{k=j}^{output_size-1} k*gAverageCol[k]) - j*(sum_{k=j}^{output_size-1} gAverageCol[k])
+        # = (prefix_sum_k_gAC[output_size]-prefix_sum_k_gAC[j]) - j*(prefix_sum_gAC[output_size]-prefix_sum_gAC[j])
+        j_out = np.arange(output_size)
+        Summation2_array = (prefix_sum_k_gAC[-1] - prefix_sum_k_gAC[j_out]) - j_out*(prefix_sum_gAC[-1]-prefix_sum_gAC[j_out])
+
+        # b_dmr[j] = (1 + Summation2_j/g_word) / (1 + Summation_word/g_word)
+        b_dmr = (1 + Summation2_array/g_word)/(1 + Summation_word/g_word)
+
+        # Diagonal matrices A and B
         A_dmr = np.diag(a_dmr)
         B_dmr = np.diag(b_dmr)
-        W_dmr = A_dmr.dot(G).dot(B_dmr)
+        
+        # Compute W_dmr
+        W_dmr = A_dmr @ G @ B_dmr
 
-        V_a_matrix = np.tile(Potential.reshape(-1, 1), output)
-        current_dmr = Potential.dot(W_dmr)
+        # V_a_matrix = tile of Potential to match output dimension
+        V_a_matrix = np.tile(Potential.reshape(-1, 1), output_size)
+
+        current_dmr = Potential @ W_dmr
         voltage_drops_dmr = A_dmr @ V_a_matrix @ B_dmr
 
         return voltage_drops_dmr, current_dmr
+
 
 
 

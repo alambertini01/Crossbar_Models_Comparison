@@ -22,8 +22,8 @@ Models = [
     JeongModel_avgv2("Jeong"),
     IdealModel("Ideal"),
     DMRModel("DMR_old"),
-    DMRModel_acc("DMR"),
-    DMRModel_new("DMR_new"),
+    DMRModel_acc("DMR_acc"),
+    DMRModel_new("DMR"),
     GammaModel("Gamma_old"),
     GammaModel_acc("Gamma_acc_v1"),
     GammaModel_acc_v2("Gamma"),
@@ -42,7 +42,7 @@ Models = [
 
 # enabled_models = [ "Ideal","DMR_acc","Gamma_acc", "CrossSim","Memtorch_cpp","Memtorch_python","NgSpice"]
 # enabled_models = [model.name for model in Models]
-enabled_models = ["Ideal", "Jeong","DMR","Gamma","CrossSim"]
+enabled_models = ["Ideal", "Jeong","DMR","Gamma"]
 
 reference_model = "CrossSim4"
 
@@ -61,7 +61,7 @@ variabilitySize = 5
 
 
 # Flag to enable/disable the visualization of the first model
-show_first_model = True
+show_first_model = False
 # Low resistance proggramming value
 R_lrs = 1000
 # Input voltages parameters
