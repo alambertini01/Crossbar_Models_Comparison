@@ -204,6 +204,16 @@ colors = [
 
 markers = ['o', 's', 'D', '^', 'v', 'p']
 
+plt.rcParams.update({
+    'font.size': 14,
+    'font.family': 'Arial',
+    'axes.labelsize': 16,
+    'axes.titlesize': 18,
+    'legend.fontsize': 14,
+    'xtick.labelsize': 14,
+    'ytick.labelsize': 14
+})
+
 # Results Folder
 end = datetime.datetime.now(pytz.timezone('Europe/Rome'))
 folder = 'Results/'+str(end.year)+ str(end.month)+  str(end.day) + '_'+ str(end.hour) +'_'+ str(end.minute)+"_ArraySize_Sweep"
@@ -293,20 +303,12 @@ for i, (model_name, color) in enumerate(zip(enabled_models[:-1], model_colors)):
     ax.fill(angles, values, color=color, alpha=0.25)
 # Customize axis labels
 ax.set_xticks(angles[:-1])
-ax.set_xticklabels([label.replace(' ', '\n') for label in labels], fontsize=12, fontweight='bold', color='black')
+ax.set_xticklabels([label.replace(' ', '\n') for label in labels])
 # Title and legend
-ax.set_title("Models Performance Comparison\n", size=18, pad=30, color='black')
 ax.legend(
     loc='upper right',
     bbox_to_anchor=(1.3, 1.1),
-    fontsize=12,
-    title="Models",
-    title_fontsize=14,
-    frameon=True,
-    fancybox=True,
-    shadow=True,
-    borderpad=1.2,
-    labelspacing=1.2
+    title="Models"
 )
 plt.tight_layout()
 plt.savefig(folder + '/Figure_Spider_plot.png')
@@ -343,12 +345,12 @@ for i, (data_type, data_values, label, error_label) in enumerate(zip(data_types,
                 linestyle='-'
             )
         # Customize the plot
-        ax.set_xlabel(label, fontsize=14)
-        ax.set_ylabel(error_label, fontsize=14)
-        ax.set_title(f'Model Normalized Error vs {label}', fontsize=16, weight='bold')
-        ax.legend(fontsize=12)
+        ax.set_xlabel(label)
+        ax.set_ylabel(error_label)
+        ax.set_title(f'Model Normalized Error vs {label}')
+        ax.legend()
         ax.grid(True, which="both", linestyle='--', linewidth=0.5)
-        ax.tick_params(axis='both', which='major', labelsize=12)
+        ax.tick_params(axis='both', which='major')
         # Save each figure
         fig.tight_layout()
         plt.savefig(f"{folder}/Figure_error_vs_{data_type}.png", dpi=300)

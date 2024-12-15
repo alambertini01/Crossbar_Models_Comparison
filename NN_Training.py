@@ -41,7 +41,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
 # Hyperparameters
-hiddenLayer = 64
+hiddenLayer = 128
 batch_size = 64
 learning_rate = 0.002
 epochs = 10
@@ -63,7 +63,7 @@ test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 # Initialize model weights to be positive
 weights = {
     'fc1_weights': torch.abs(torch.randn(28 * 28, hiddenLayer)) if non_negative else torch.randn(28 * 28, hiddenLayer),
-    'fc1_bias': torch.randn(64),
+    'fc1_bias': torch.randn(hiddenLayer),
     'fc2_weights': torch.abs(torch.randn(hiddenLayer, 10)) if non_negative else torch.randn(hiddenLayer, 10),
     'fc2_bias': torch.randn(10)
 }

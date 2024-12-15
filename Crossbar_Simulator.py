@@ -31,7 +31,7 @@ from CrossbarModels.Crossbar_Models_pytorch import gamma_model, dmr_model, jeong
 ############################ PARAMETERS ##############################
 
 # Dimensions of the crossbar
-input,output = (64,64)
+input,output = (16,16)
 
 # Initialize each model instance
 Models = [
@@ -40,8 +40,8 @@ Models = [
     JeongModel_avgv2("Jeong_torch"),
     IdealModel("Ideal"),
     DMRModel("DMR_old"),
-    DMRModel_acc("DMR"),
-    DMRModel_new("DMR_new"),
+    DMRModel_acc("DMR_acc"),
+    DMRModel_new("DMR"),
     DMRModel_new("DMR_torch"),
     GammaModel("Gamma_torch"),
     GammaModel_acc("Gamma_acc_v1"),
@@ -72,25 +72,25 @@ new_model_functions = {
     "CrossSim_torch" : crosssim_model
 }
 
-enabled_models = [ "Ideal","Jeong","DMR","Gamma","CrossSim2","DMR_new"]
+enabled_models = [ "Ideal","Jeong","DMR","Gamma","CrossSim2", "CrossSim3", "CrossSim4", "CrossSim5", "CrossSim6", "CrossSim7", "CrossSim8", "CrossSim9", "Memtorch", "NgSpice"]
 # enabled_models = [model.name for model in Models]
 # enabled_models = [ "Ideal","Jeong_avgv2","DMR","Gamma","CrossSim1","CrossSim2","CrossSim3","CrossSim4","CrossSim5","CrossSim6","CrossSim7","CrossSim8","CrossSim9","CrossSim10","Memtorch","NgSpice"]
 
-reference_model = "Memtorch"
+reference_model =  "CrossSim10"
 
 # Low resistance proggramming value
 R_lrs = 1000
 Rhrs_percentage=50
 # parasitic resistance value
 parasiticResistance = np.arange(0.2, 5, 0.2)
-parasiticResistance = np.array([1])
+# parasiticResistance = np.array([2])
 
 # Memory window (ratio between Hrs and Lrs)
 memoryWindow = np.arange(5, 101, 5)
-memoryWindow = np.array([100])
+memoryWindow = np.array([20])
 
 # Input voltages parameters
-v_On_percentage = 50
+v_On_percentage = 100
 population = [0.5, 0.0]
 
 # Metric type (2=Current*Times, 1=Current, 0=Voltage)
@@ -98,7 +98,7 @@ Metric_type = 1
 
 # Variability parameters
 v_flag = 1
-v_size = 10
+v_size = 1
 
 
 
@@ -296,7 +296,8 @@ color_mapping = {
     "Ng": "pink",
     "CrossSim": "b",
     "Ideal": "black",
-    "Memtorch": "orange"
+    "Memtorch": "orange",
+    "LTSpice": "m"
 }
 
 # Generate the colors list
@@ -630,97 +631,154 @@ if Winning_models_map:
 
 
 
-
 if scatter_plot:
     mean_Metric = np.mean(Metric, axis=0).mean(axis=0)
     variance_Metric = np.var(Metric, axis=0).mean(axis=0)  # Compute variance
+
+    # Remove 'Ideal' if present, and handle arrays accordingly
     if "Ideal" in enabled_models:
         ideal_index = enabled_models.index("Ideal")
-        plot_models = [model for i, model in enumerate(enabled_models[:-1]) if i != ideal_index]
+        # Remove 'Ideal' entry from models
+        plot_models = [m for i, m in enumerate(enabled_models[:-1]) if i != ideal_index]
+        # Remove the corresponding entries from arrays
         plot_times = np.delete(normalized_simulation_times[:-1], ideal_index)
         plot_Metric = np.delete(mean_Metric, ideal_index)
-        plot_variance = np.delete(variance_Metric, ideal_index)  # Adjust variance array
+        plot_variance = np.delete(variance_Metric, ideal_index)
     else:
+        # If Ideal not present, just use all models except the last one (assuming the last is a reference)
         plot_models = enabled_models[:-1]
         plot_times = simulation_times[:-1]
         plot_Metric = mean_Metric
-        plot_variance = variance_Metric  # Use full variance array
-    fig, ax = plt.subplots()
-    # Filter data for "CrossSim" models
+        plot_variance = variance_Metric
+    # Create a matching colors list for the plot_models
+    # colors was initially defined to match enabled_models, so we rebuild a plot_colors array:
+    model_to_color = {model: color for model, color in zip(enabled_models, colors)}
+    plot_colors = [model_to_color[m] for m in plot_models]
+    # Create a larger figure for better readability
+    fig, ax = plt.subplots(figsize=(12, 8))  # Increased figure size
+    # Identify CrossSim models among the plotted models
     crosssim_indices = [i for i, model in enumerate(plot_models) if model.startswith("CrossSim")]
+
+    # If multiple CrossSim models are present, perform a regression on them
     if len(crosssim_indices) > 1:
-        crosssim_times = np.array(plot_times)[crosssim_indices].reshape(-1, 1)
-        crosssim_Metric = np.array(plot_Metric)[crosssim_indices]
-        # Fit a linear regression model
-        reg = LinearRegression().fit(np.log(crosssim_times), np.log(crosssim_Metric))  # Log scale for both time and Metric
+        crosssim_times = plot_times[crosssim_indices].reshape(-1, 1)
+        crosssim_values = plot_Metric[crosssim_indices]
+        reg = LinearRegression().fit(np.log(crosssim_times), np.log(crosssim_values))  
         reg_line_x = np.linspace(crosssim_times.min(), crosssim_times.max(), 100).reshape(-1, 1)
-        reg_line_y = np.exp(reg.predict(np.log(reg_line_x)))  # Convert the predicted log values back to the original scale
-        # Plot regression line
-        ax.plot(reg_line_x, reg_line_y, color='blue', linestyle='--', linewidth=1.5, label='CrossSim Regression')
+        reg_line_y = np.exp(reg.predict(np.log(reg_line_x)))
+        ax.plot(reg_line_x, reg_line_y, color='blue', linestyle='--', linewidth=2, label='CrossSim Regression')  # Increased linewidth
+
+    # Plot scatter points with larger markers if needed
     scatter = ax.scatter(
         plot_times,
         plot_Metric,
-        c=[colors[crosssim_indices[0] % len(colors)] if i in crosssim_indices else colors[(i + 1) % len(colors)]
-           for i in range(len(plot_models))],
-        s=120,
+        c=plot_colors,
+        s=120,  # Marker size
         marker='o',
         edgecolor="black",
         linewidth=0.7
     )
-    # Plot variance bars
+
+    # Plot error bars
     for i, (x, y, var) in enumerate(zip(plot_times, plot_Metric, plot_variance)):
-        ax.errorbar(x, y, yerr=np.sqrt(var), fmt='o',
-                    color=colors[crosssim_indices[0] % len(colors)] if i in crosssim_indices else colors[(i + 1) % len(colors)], capsize=5)
-    # # Annotate non-CrossSim models
-    # for i, model in enumerate(plot_models):
-    #     if not model.startswith("CrossSim"):
-    #         ax.annotate(
-    #             model, (plot_times[i], plot_Metric[i]),
-    #             textcoords="offset points", xytext=(10, 0), ha='left'
-    #         )
+        ax.errorbar(
+            x, y, yerr=np.sqrt(var), fmt='o', 
+            color=plot_colors[i], capsize=5
+        )
+
+    # Add grid with adjusted properties if needed
     ax.grid(True, which="both", linestyle='--', linewidth=0.5, color="gray", alpha=0.7)
-    # Legend Handles
-    legend_handles = [
-        plt.Line2D([0], [0], marker='o', color='w', label=plot_models[i],
-                   markerfacecolor=colors[(i + 1) % len(colors)], markersize=10)
-        for i in range(len(plot_models)) if i not in crosssim_indices
-    ]
-    # Add regression line to the legend
-    legend_handles.append(plt.Line2D([0], [0], color='blue', linestyle='--', label='CrossSim'))
-    ax.legend(handles=legend_handles, title="Models", bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
-    # Set log scale for x-axis (simulation time)
+
+    # Create legend handles with larger font sizes
+    legend_handles = []
+    # Add handles for non-CrossSim models
+    for i, model in enumerate(plot_models):
+        if not model.startswith("CrossSim"):
+            legend_handles.append(
+                plt.Line2D([0], [0], marker='o', color='w', label=model,
+                           markerfacecolor=plot_colors[i], markersize=10)
+            )
+
+    # Add a single handle for CrossSim if present
+    if len(crosssim_indices) > 0:
+        legend_handles.append(
+            plt.Line2D([0], [0], color='blue', linestyle='--', label='CrossSim Regression')
+        )
+
+    # Add the legend with larger font size
+    ax.legend(handles=legend_handles, title="Models", fontsize=14, title_fontsize=16,
+              bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
+
+    # Set x-scale to log
     ax.set_xscale('log')
-    ax.set_xlabel('Normalized Simulation Time (log scale)' if "Ideal" in enabled_models else 'Execution Time (seconds, log scale)')
-    ax.set_ylabel(error_label)
-    ax.set_title('Scatter Plot' + ' (' + array_size_string +  ')\n' )
-    # Add Inset for low-error models
+    # Set labels with larger font sizes
+    ax.set_xlabel('Normalized Simulation Time (log scale)' if "Ideal" in enabled_models else 'Execution Time (seconds, log scale)', fontsize=14)
+    ax.set_ylabel(error_label, fontsize=14)
+    # Set title with larger font size
+    ax.set_title('Scatter Plot' + ' (' + array_size_string +  ')\n', fontsize=18)
+
+    # Adjust tick parameters for larger font sizes
+    ax.tick_params(axis='both', which='major', labelsize=14)
+
+    # Inset axis for low-error models
     inset_ax = inset_axes(ax, width="60%", height="60%", loc='upper right')
-    threshold = 0.1  # Adjust as needed for "low-error" models
+    threshold = 0.1  # Adjust as needed for "low-error" threshold
     low_error_indices = [i for i, metric in enumerate(plot_Metric) if metric < threshold]
-    inset_times = np.array(plot_times)[low_error_indices].reshape(-1, 1)
-    inset_metrics = np.array(plot_Metric)[low_error_indices]
-    inset_variance = np.array(plot_variance)[low_error_indices]
-    # Linear regression for inset (CrossSim models)
-    if len(crosssim_indices) > 1:
-        inset_crosssim_times = np.array(plot_times)[crosssim_indices].reshape(-1, 1)
-        inset_crosssim_metrics = np.array(plot_Metric)[crosssim_indices]
-        inset_reg = LinearRegression().fit(np.log(inset_crosssim_times), np.log(inset_crosssim_metrics))
-        inset_reg_line_x = np.linspace(inset_crosssim_times.min(), inset_crosssim_times.max(), 100).reshape(-1, 1)
-        inset_reg_line_y = np.exp(inset_reg.predict(np.log(inset_reg_line_x)))
-        inset_ax.plot(inset_reg_line_x, inset_reg_line_y, color='blue', linestyle='--', linewidth=1.5, label='Inset Regression')
-    inset_ax.scatter(inset_times, inset_metrics, c=[colors[(i + 1) % len(colors)] for i in low_error_indices],
-                     s=60, marker='o', edgecolor="black", linewidth=0.7)
-    for i, (x, y, var) in enumerate(zip(inset_times, inset_metrics, inset_variance)):
-        inset_ax.errorbar(x, y, yerr=np.sqrt(var), fmt='o', color=colors[(low_error_indices[i] + 1) % len(colors)], capsize=3)
-    inset_ax.set_xscale('log')
-    inset_ax.set_yscale('log')
-    inset_ax.grid(True, which="both", linestyle='--', linewidth=0.5, alpha=0.7)
-    inset_ax.set_title("Logaritmic Zoom on Low-Error Models", fontsize=10)
-    inset_ax.tick_params(axis='both', which='major', labelsize=8)
-    # Save and show the plot
+
+    if len(low_error_indices) > 0:
+        inset_times = plot_times[low_error_indices]
+        inset_metrics = plot_Metric[low_error_indices]
+        inset_variance = plot_variance[low_error_indices]
+        inset_colors = [plot_colors[i] for i in low_error_indices]
+
+        # Perform a linear regression on CrossSim models inside the inset if needed
+        if len(crosssim_indices) > 1:
+            inset_crosssim_times = plot_times[crosssim_indices].reshape(-1, 1)
+            inset_crosssim_metrics = plot_Metric[crosssim_indices]
+            inset_reg = LinearRegression().fit(np.log(inset_crosssim_times), np.log(inset_crosssim_metrics))
+            inset_reg_line_x = np.linspace(inset_crosssim_times.min(), inset_crosssim_times.max(), 100).reshape(-1, 1)
+            inset_reg_line_y = np.exp(inset_reg.predict(np.log(inset_reg_line_x)))
+            inset_ax.plot(inset_reg_line_x, inset_reg_line_y, color='blue', linestyle='--', linewidth=2, label='Inset Regression')  # Increased linewidth
+
+        # Plot scatter in inset
+        inset_ax.scatter(
+            inset_times,
+            inset_metrics,
+            c=inset_colors,
+            s=60,  # Smaller marker size for inset
+            marker='o',
+            edgecolor="black",
+            linewidth=0.7
+        )
+
+        # Plot error bars in inset
+        for idx, (x, y, var) in enumerate(zip(inset_times, inset_metrics, inset_variance)):
+            inset_ax.errorbar(
+                x, y, yerr=np.sqrt(var), fmt='o', 
+                color=inset_colors[idx],
+                capsize=3
+            )
+
+        # Set scales to log
+        inset_ax.set_xscale('log')
+        inset_ax.set_yscale('log')
+        # Add grid
+        inset_ax.grid(True, which="both", linestyle='--', linewidth=0.5, alpha=0.7)
+        # Set title with larger font size
+        inset_ax.set_title("Logarithmic Zoom on Low-Error Models", fontsize=14)
+        # Adjust tick parameters for larger font sizes
+        inset_ax.tick_params(axis='both', which='major', labelsize=12)
+
+    # Adjust layout to accommodate legend
     plt.tight_layout()
-    plt.savefig(folder + '/Figure_Scatter_SimulationTimes_vs_error_with_inset.png')
+
+    # Save the figure with higher DPI for better resolution
+    plt.savefig(folder + '/Figure_Scatter_SimulationTimes_vs_error_with_inset.png', dpi=300)  # Increased DPI
+
+    # Show the plot
     plt.show()
+
+
 
 
 # if spider_plot:
