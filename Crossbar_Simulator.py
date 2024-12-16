@@ -5,8 +5,9 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+from matplotlib.colors import to_hex, to_rgb, LinearSegmentedColormap
+from matplotlib.cm import ScalarMappable
 from matplotlib.patches import Patch
-from matplotlib.colors import to_hex
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from math import pi
 import time
@@ -31,7 +32,7 @@ from CrossbarModels.Crossbar_Models_pytorch import gamma_model, dmr_model, jeong
 ############################ PARAMETERS ##############################
 
 # Dimensions of the crossbar
-input,output = (16,16)
+input,output = (128,128)
 
 # Initialize each model instance
 Models = [
@@ -71,7 +72,7 @@ new_model_functions = {
     "Jeong_torch": jeong_model,
     "CrossSim_torch" : crosssim_model
 }
-
+enabled_models = [ "Ideal","Jeong","DMR","Gamma"]
 enabled_models = [ "Ideal","Jeong","DMR","Gamma","CrossSim2", "CrossSim3", "CrossSim4", "CrossSim5", "CrossSim6", "CrossSim7", "CrossSim8", "CrossSim9", "Memtorch", "NgSpice"]
 # enabled_models = [model.name for model in Models]
 # enabled_models = [ "Ideal","Jeong_avgv2","DMR","Gamma","CrossSim1","CrossSim2","CrossSim3","CrossSim4","CrossSim5","CrossSim6","CrossSim7","CrossSim8","CrossSim9","CrossSim10","Memtorch","NgSpice"]
@@ -83,7 +84,7 @@ R_lrs = 1000
 Rhrs_percentage=50
 # parasitic resistance value
 parasiticResistance = np.arange(0.2, 5, 0.2)
-# parasiticResistance = np.array([2])
+parasiticResistance = np.array([2])
 
 # Memory window (ratio between Hrs and Lrs)
 memoryWindow = np.arange(5, 101, 5)
@@ -98,7 +99,7 @@ Metric_type = 1
 
 # Variability parameters
 v_flag = 1
-v_size = 1
+v_size = 2
 
 
 
@@ -309,6 +310,16 @@ colors = [
 ]
 
 markers = ['o', 's', 'D', '^', 'v', 'p']
+
+plt.rcParams.update({
+    'font.size': 14,
+    'font.family': 'Arial',
+    'axes.labelsize': 16,
+    'axes.titlesize': 18,
+    'legend.fontsize': 14,
+    'xtick.labelsize': 14,
+    'ytick.labelsize': 14
+})
 
 # Figures Selection
 Simulation_times_plot = 1
@@ -596,37 +607,84 @@ if print_table:
     wb.save(excel_path)
     os.startfile(excel_path)
 
+# Compute the winning model for each parasiticResistance vs. memoryWindow combination
 if Winning_models_map:
     model_labels = np.array(enabled_models)
+    # For error metrics (Metric_type=1 or 0), lower is better, so winning model = min metric
+    # For Metric_type=2 (precision/time), higher is better, so winning model = max metric
     if Metric_type == 2:
         winning_indices = np.argmax(Metric, axis=-1)
     else:
         winning_indices = np.argmin(Metric, axis=-1)
-    winning_models = model_labels[winning_indices]
-    # Define color mapping using the order of enabled_models
-    hex_colors = [to_hex(color) for color in colors]
-    color_map = {model: hex_colors[i] for i, model in enumerate(enabled_models)}
-    # Map winning models to indices
-    model_to_idx = {model: idx for idx, model in enumerate(enabled_models)}
-    model_indices = np.vectorize(model_to_idx.get)(winning_models)
-    winning_models_unique = [model for model in enabled_models if model in np.unique(winning_models)]
-    filtered_colors = [color_map[model] for model in winning_models_unique]
-    cmap = mcolors.ListedColormap(filtered_colors)
-    # Plot the heatmap
-    plt.figure(figsize=(10, 8))
-    plt.imshow(model_indices, cmap=cmap, origin="lower", aspect="auto",
-                extent=[memoryWindow[0], memoryWindow[-1], parasiticResistance[0], parasiticResistance[-1]],
-                interpolation="nearest")
-    # Add axis labels
+    non_reference_models = enabled_models[:-1]
+    if Metric_type == 2:
+        winning_indices_nonref = np.argmax(Metric, axis=-1)
+    else:
+        winning_indices_nonref = np.argmin(Metric, axis=-1)
+    
+    # winning_indices_nonref now corresponds directly to indices in non_reference_models
+    # Extract the metric values for these winning models
+    # metric_winner: same shape as winning_indices_nonref, each entry is the winning model's metric value
+    metric_winner = np.zeros_like(winning_indices_nonref, dtype=float)
+    for z in range(parasiticSize):
+        for m_ in range(memorySize):
+            metric_winner[z, m_] = Metric[z, m_, winning_indices_nonref[z, m_]]
+    # Identify the winning models' names
+    winning_models_nonref = np.array(non_reference_models)[winning_indices_nonref]
+    # Get min and max of the winning metric values for normalization
+    metric_min = np.min(metric_winner)
+    metric_max = np.max(metric_winner)
+    if metric_min == metric_max:
+        # Avoid division by zero if all metrics are equal
+        metric_min = 0.0
+        metric_max = 1.0
+    # Prepare a 2D array of RGBA colors for the heatmap
+    # We'll blend between white (low metric) and the model's base color (high metric)
+    white = np.array([1.0, 1.0, 1.0])  # white color in RGB
+    cell_colors = np.zeros((parasiticSize, memorySize, 3))
+    # Create a dict mapping model to base RGB color
+    # We already have 'colors' as a list of colors for each model in enabled_models
+    # Convert colors to RGB if they are not already
+    from matplotlib.colors import to_rgb
+    model_color_map = {model: to_rgb(c) for model, c in zip(enabled_models, colors)}
+    # Define a starting luminance that is not white but slightly darker gray
+    light_gray = np.array([0.9, 0.9, 0.9]) 
+    # Normalize and compute cell colors
+    for z in range(parasiticSize):
+        for m_ in range(memorySize):
+            model = winning_models_nonref[z, m_]
+            base_color = np.array(model_color_map[model])
+            err_value = metric_winner[z, m_]
+            # Normalize error to [0,1]
+            scale = (err_value - metric_min) / (metric_max - metric_min)
+            # Interpolate color: light_gray at low error, base_color at high error
+            cell_color = light_gray * (1 - scale) + base_color * scale
+            cell_colors[z, m_] = cell_color
+    plt.figure(figsize=(6, 6))
+    plt.imshow(cell_colors, origin="lower", aspect="auto",
+            extent=[memoryWindow[0], memoryWindow[-1], parasiticResistance[0], parasiticResistance[-1]],
+            interpolation="nearest")
     plt.xlabel("Memory Window")
     plt.ylabel("Parasitic Resistance")
-    plt.title("Winning Models Map")
-    # Create a legend using enabled_models order
-    legend_patches = [Patch(facecolor=color_map[model], label=model) for model in winning_models_unique]
-    plt.legend(handles=legend_patches, bbox_to_anchor=(1.05, 1), loc="upper left", title="Models")
-    # Show the plot
+    plt.title("Winning Models Map (Shaded by Error)")
+    # Create legend patches with base colors (full saturation) of winning models
+    winning_models_unique = [model for model in enabled_models if model in np.unique(winning_models_nonref)]
+    legend_patches = [Patch(facecolor=model_color_map[model], label=model) for model in winning_models_unique]
+    # Move the legend to the bottom center of the figure
+    plt.legend(handles=legend_patches, loc="upper center", bbox_to_anchor=(0.5, -0.1), ncol=3)
+    # Create a grayscale colormap from light_gray to black for the colorbar
+    cmap_gray = LinearSegmentedColormap.from_list("gray_to_black", [light_gray, (0,0,0)], N=256)
+    sm = ScalarMappable(cmap=cmap_gray, norm=plt.Normalize(vmin=metric_min, vmax=metric_max))
+    sm.set_array([])
+    # Get current figure and axes
+    fig = plt.gcf()
+    ax = plt.gca()
+    # Add colorbar on the right side
+    cbar = fig.colorbar(sm, ax=ax, fraction=0.046, pad=0.04)
+    cbar.set_label("Relative error (%)")
+    # Adjust layout to avoid overlap
     plt.tight_layout()
-    plt.savefig(folder + '/Figure_Winning_Models_Map.png')
+    plt.savefig(folder + '/Figure_Winning_Models_Map_Shaded.png')
     plt.show()
 
 
@@ -634,7 +692,6 @@ if Winning_models_map:
 if scatter_plot:
     mean_Metric = np.mean(Metric, axis=0).mean(axis=0)
     variance_Metric = np.var(Metric, axis=0).mean(axis=0)  # Compute variance
-
     # Remove 'Ideal' if present, and handle arrays accordingly
     if "Ideal" in enabled_models:
         ideal_index = enabled_models.index("Ideal")
@@ -655,10 +712,9 @@ if scatter_plot:
     model_to_color = {model: color for model, color in zip(enabled_models, colors)}
     plot_colors = [model_to_color[m] for m in plot_models]
     # Create a larger figure for better readability
-    fig, ax = plt.subplots(figsize=(12, 8))  # Increased figure size
+    fig, ax = plt.subplots(figsize=(9, 6)) 
     # Identify CrossSim models among the plotted models
     crosssim_indices = [i for i, model in enumerate(plot_models) if model.startswith("CrossSim")]
-
     # If multiple CrossSim models are present, perform a regression on them
     if len(crosssim_indices) > 1:
         crosssim_times = plot_times[crosssim_indices].reshape(-1, 1)
@@ -667,7 +723,6 @@ if scatter_plot:
         reg_line_x = np.linspace(crosssim_times.min(), crosssim_times.max(), 100).reshape(-1, 1)
         reg_line_y = np.exp(reg.predict(np.log(reg_line_x)))
         ax.plot(reg_line_x, reg_line_y, color='blue', linestyle='--', linewidth=2, label='CrossSim Regression')  # Increased linewidth
-
     # Plot scatter points with larger markers if needed
     scatter = ax.scatter(
         plot_times,
@@ -678,17 +733,14 @@ if scatter_plot:
         edgecolor="black",
         linewidth=0.7
     )
-
     # Plot error bars
     for i, (x, y, var) in enumerate(zip(plot_times, plot_Metric, plot_variance)):
         ax.errorbar(
             x, y, yerr=np.sqrt(var), fmt='o', 
             color=plot_colors[i], capsize=5
         )
-
     # Add grid with adjusted properties if needed
     ax.grid(True, which="both", linestyle='--', linewidth=0.5, color="gray", alpha=0.7)
-
     # Create legend handles with larger font sizes
     legend_handles = []
     # Add handles for non-CrossSim models
@@ -698,39 +750,32 @@ if scatter_plot:
                 plt.Line2D([0], [0], marker='o', color='w', label=model,
                            markerfacecolor=plot_colors[i], markersize=10)
             )
-
     # Add a single handle for CrossSim if present
     if len(crosssim_indices) > 0:
         legend_handles.append(
             plt.Line2D([0], [0], color='blue', linestyle='--', label='CrossSim Regression')
         )
-
     # Add the legend with larger font size
-    ax.legend(handles=legend_handles, title="Models", fontsize=14, title_fontsize=16,
+    ax.legend(handles=legend_handles, title="Models",
               bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
-
     # Set x-scale to log
     ax.set_xscale('log')
     # Set labels with larger font sizes
     ax.set_xlabel('Normalized Simulation Time (log scale)' if "Ideal" in enabled_models else 'Execution Time (seconds, log scale)', fontsize=14)
     ax.set_ylabel(error_label, fontsize=14)
     # Set title with larger font size
-    ax.set_title('Scatter Plot' + ' (' + array_size_string +  ')\n', fontsize=18)
-
+    ax.set_title('Scatter Plot' + ' (' + array_size_string +  ')\n')
     # Adjust tick parameters for larger font sizes
-    ax.tick_params(axis='both', which='major', labelsize=14)
-
+    ax.tick_params(axis='both', which='major')
     # Inset axis for low-error models
     inset_ax = inset_axes(ax, width="60%", height="60%", loc='upper right')
     threshold = 0.1  # Adjust as needed for "low-error" threshold
     low_error_indices = [i for i, metric in enumerate(plot_Metric) if metric < threshold]
-
     if len(low_error_indices) > 0:
         inset_times = plot_times[low_error_indices]
         inset_metrics = plot_Metric[low_error_indices]
         inset_variance = plot_variance[low_error_indices]
         inset_colors = [plot_colors[i] for i in low_error_indices]
-
         # Perform a linear regression on CrossSim models inside the inset if needed
         if len(crosssim_indices) > 1:
             inset_crosssim_times = plot_times[crosssim_indices].reshape(-1, 1)
@@ -739,7 +784,6 @@ if scatter_plot:
             inset_reg_line_x = np.linspace(inset_crosssim_times.min(), inset_crosssim_times.max(), 100).reshape(-1, 1)
             inset_reg_line_y = np.exp(inset_reg.predict(np.log(inset_reg_line_x)))
             inset_ax.plot(inset_reg_line_x, inset_reg_line_y, color='blue', linestyle='--', linewidth=2, label='Inset Regression')  # Increased linewidth
-
         # Plot scatter in inset
         inset_ax.scatter(
             inset_times,
@@ -750,7 +794,6 @@ if scatter_plot:
             edgecolor="black",
             linewidth=0.7
         )
-
         # Plot error bars in inset
         for idx, (x, y, var) in enumerate(zip(inset_times, inset_metrics, inset_variance)):
             inset_ax.errorbar(
@@ -758,91 +801,21 @@ if scatter_plot:
                 color=inset_colors[idx],
                 capsize=3
             )
-
         # Set scales to log
         inset_ax.set_xscale('log')
         inset_ax.set_yscale('log')
         # Add grid
         inset_ax.grid(True, which="both", linestyle='--', linewidth=0.5, alpha=0.7)
         # Set title with larger font size
-        inset_ax.set_title("Logarithmic Zoom on Low-Error Models", fontsize=14)
+        inset_ax.set_title("Logarithmic Zoom", fontsize=14)
         # Adjust tick parameters for larger font sizes
-        inset_ax.tick_params(axis='both', which='major', labelsize=12)
-
+        inset_ax.tick_params(axis='both', which='major')
     # Adjust layout to accommodate legend
     plt.tight_layout()
-
     # Save the figure with higher DPI for better resolution
     plt.savefig(folder + '/Figure_Scatter_SimulationTimes_vs_error_with_inset.png', dpi=300)  # Increased DPI
-
     # Show the plot
     plt.show()
-
-
-
-
-# if spider_plot:
-#     # Take the mean over the first 2 dimensions for Current_error and Voltage_error
-#     current_error_mean = np.mean(Current_error, axis=(0, 1))
-#     voltage_error_mean = np.mean(Voltage_error, axis=(0, 1))
-#     # Compute the inverse of all metrics (as smaller is better)
-#     inverse_current_error = 1 / current_error_mean
-#     inverse_voltage_error = 1 / voltage_error_mean
-#     inverse_simulation_times = 1 / simulation_times[:-1]
-#     # Handle "Ideal" model
-#     if "Ideal" in enabled_models:
-#         ideal_index = enabled_models.index("Ideal")
-#         # Remove "Ideal" data from metrics
-#         inverse_simulation_times = np.delete(inverse_simulation_times, ideal_index)
-#         inverse_voltage_error = np.delete(inverse_voltage_error, ideal_index)
-#         inverse_current_error = np.delete(inverse_current_error, ideal_index)
-#         # Remove "Ideal" from enabled_models
-#         enabled_models = [model for i, model in enumerate(enabled_models) if i != ideal_index]
-#     # Combine metrics for radar plot
-#     metrics = np.vstack([inverse_current_error, inverse_voltage_error, inverse_simulation_times])
-#     # Normalize each metric to [0, 1]
-#     metrics_min = metrics.min(axis=1, keepdims=True)
-#     metrics_max = metrics.max(axis=1, keepdims=True)
-#     metrics_scaled = metrics / metrics.max(axis=1, keepdims=True)
-#     # Labels and angles for the radar plot
-#     labels = ['Current Accuracy', 'Voltage Accuracy', 'Simulation Speed']
-#     angles = [n / float(len(labels)) * 2 * pi for n in range(len(labels))]
-#     angles += angles[:1]  # Repeat the first angle to close the polygon
-#     model_colors = colors[:len(enabled_models)]  # Map colors to models
-#     # Radar plot setup
-#     fig, ax = plt.subplots(figsize=(10, 10), subplot_kw={'polar': True})
-#     ax.spines['polar'].set_visible(False)  # Remove default grid circle
-#     ax.set_facecolor('#f9f9f9')  # Light gray background
-#     ax.grid(color='gray', linestyle='--', linewidth=0.5, alpha=0.5)  # Faint gridlines
-#     ax.set_yticks([])  # Remove radial ticks
-#     # Plot for each model
-#     for i, (model_name, color) in enumerate(zip(enabled_models[:-1], model_colors[1:])):
-#         values = metrics_scaled[:, i].tolist()
-#         values += values[:1]  # Repeat the first value to close the polygon
-#         ax.plot(angles, values, label=model_name, color=color, linewidth=2)
-#         ax.fill(angles, values, color=color, alpha=0.25)
-#     # Customize axis labels
-#     ax.set_xticks(angles[:-1])
-#     ax.set_xticklabels(labels, fontsize=12, fontweight='bold', color='black')
-#     # Title
-#     ax.set_title("Models Performance Comparison\n"+array_size_string, size=18, pad=30, color='black')
-#     # Customize legend
-#     ax.legend(
-#         loc='upper right',
-#         bbox_to_anchor=(1.3, 1.1),
-#         fontsize=12,
-#         title="Models",
-#         title_fontsize=14,
-#         frameon=True,
-#         fancybox=True,
-#         shadow=True,
-#         borderpad=1.2,
-#         labelspacing=1.2,
-#     )
-#     plt.tight_layout()
-#     plt.savefig(folder + '/Figure_Spider_plot.png')
-#     plt.show()
-
 
 
 if Resistance_heatmap:

@@ -1,0 +1,13 @@
+Training Log
+Model: dmr_model
+Parasitic Resistance: 2.0
+R_lrs: 1000.0
+R_hrs: 100000.0
+Max Array Size: 16
+Hidden Layer Size: 64
+Batch Size: 512
+Learning Rate: 0.002
+Epochs: 10
+Final Training Accuracy: 98.35%
+Test Accuracy: 97.14%
+Total Training Time (s): 1538.8012
