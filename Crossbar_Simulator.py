@@ -5,7 +5,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
-from matplotlib.colors import to_hex, to_rgb, LinearSegmentedColormap
+from matplotlib.colors import to_hex, to_rgb, LinearSegmentedColormap, Normalize
 from matplotlib.cm import ScalarMappable
 from matplotlib.patches import Patch
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
@@ -62,7 +62,8 @@ Models = [
     LTSpiceModel("LTSpice"),
     NgSpiceModel("NgSpice"),
     NgSpiceNonLinearModel("NgSpiceNonLinear"),
-    MemtorchModelCpp("Memtorch"),
+    MemtorchModelCpp("Memtorch_float"),
+    MemtorchModelCpp_double("Memtorch"),
     MemtorchModelPython("Memtorch_python")
 ]
 
@@ -72,12 +73,12 @@ new_model_functions = {
     "Jeong_torch": jeong_model,
     "CrossSim_torch" : crosssim_model
 }
-enabled_models = [ "Ideal","Jeong","DMR","Gamma"]
-enabled_models = [ "Ideal","Jeong","DMR","Gamma","CrossSim2", "CrossSim3", "CrossSim4", "CrossSim5", "CrossSim6", "CrossSim7", "CrossSim8", "CrossSim9", "Memtorch", "NgSpice"]
+enabled_models = [ "Ideal","Jeong","DMR","Gamma","Gamma_torch","DMR_torch","Jeong_torch", "CrossSim_torch"]
+enabled_models = [ "Ideal","Jeong","DMR","Gamma","CrossSim1","CrossSim2", "CrossSim3", "CrossSim4", "CrossSim5", "CrossSim6", "CrossSim7", "CrossSim8", "Memtorch", "NgSpice"]
 # enabled_models = [model.name for model in Models]
 # enabled_models = [ "Ideal","Jeong_avgv2","DMR","Gamma","CrossSim1","CrossSim2","CrossSim3","CrossSim4","CrossSim5","CrossSim6","CrossSim7","CrossSim8","CrossSim9","CrossSim10","Memtorch","NgSpice"]
 
-reference_model =  "CrossSim10"
+reference_model =  "CrossSim9"
 
 # Low resistance proggramming value
 R_lrs = 1000
@@ -88,7 +89,7 @@ parasiticResistance = np.array([2])
 
 # Memory window (ratio between Hrs and Lrs)
 memoryWindow = np.arange(5, 101, 5)
-memoryWindow = np.array([20])
+memoryWindow = np.array([100])
 
 # Input voltages parameters
 v_On_percentage = 100
@@ -98,10 +99,8 @@ population = [0.5, 0.0]
 Metric_type = 1
 
 # Variability parameters
-v_flag = 1
+v_flag = 0
 v_size = 2
-
-
 
 
 
@@ -206,13 +205,6 @@ for m in range(memorySize):
                 if model.name in enabled_models:
                     model_idx = enabled_models.index(model.name)
                     
-                    # Prepare inputs for both old and new style models
-                    # Old models use: model.calculate(R, parasiticResistance, Potential, ...)
-                    # New models use: function(weight, x, parasiticResistance)
-                    
-                    # Convert R to weight = 1/R for new models
-                    # R[z, m, v] is (input, output)
-                    # For batch_size=1: weight should be (1, input, output)
                     weight_np = 1.0 / R[z, m, v]
                     weight_tensor = torch.tensor(weight_np, dtype=torch.float32) # shape (1, input, output)
                     
@@ -220,17 +212,13 @@ for m in range(memorySize):
                     x_np = Potential[np.newaxis, :]  # shape (1, input)
                     x_tensor = torch.tensor(x_np, dtype=torch.float32)
                     
-                    # Check if model name corresponds to a new-style function
+                    # Check if model name corresponds to a pytorch function
                     if model.name in new_model_functions:
-                        # Call the new PyTorch function
+                        # Call the PyTorch function
                         start_time = time.perf_counter()
                         with torch.no_grad():
                             out_curr_torch = new_model_functions[model.name](weight_tensor, x_tensor, parasiticResistance[z])
                         end_time = time.perf_counter()
-                        
-                        # v_drops_torch: (1, input, output)
-                        # out_curr_torch: (1, output)
-                        # Convert back to numpy and remove batch dimension
 
                         out_curr_np = out_curr_torch.squeeze(0).numpy() # (output,)
 
@@ -239,7 +227,7 @@ for m in range(memorySize):
                         simulation_times[model_idx] += (end_time - start_time)/totalIterations
                     
                     else:
-                        # Old model class with calculate function
+                        # Call the numpy function
                         # NonLinear_params needed only for NgSpiceNonLinear as shown in original code
                         NonLinear_params = {'X': X[z,m,v], 'S': S[z,m,v]} if model.name == 'NgSpiceNonLinear' else {'R_lrs': R_lrs, 'MW':memoryWindow[m]}
                         
@@ -281,13 +269,7 @@ if "Ideal" in enabled_models:
 
 
 
-
-
-
-
 ###################### Plotting portion ##########################################################################
-
-
 
 # Known color mapping
 color_mapping = {
@@ -335,7 +317,7 @@ Mean_Metric_plot = 1
 Metric_vs_Rpar = 1
 Metric_vs_MW = 1
 Winning_models_map = 1
-print_table = 1
+print_table = 0
 scatter_plot = 1
 spider_plot = 1
 
@@ -607,11 +589,13 @@ if print_table:
     wb.save(excel_path)
     os.startfile(excel_path)
 
+
 # Compute the winning model for each parasiticResistance vs. memoryWindow combination
 if Winning_models_map:
+    # Fixed error scale: 0% to 30%
+    ERR_MIN, ERR_MAX = 0, 30
     model_labels = np.array(enabled_models)
-    # For error metrics (Metric_type=1 or 0), lower is better, so winning model = min metric
-    # For Metric_type=2 (precision/time), higher is better, so winning model = max metric
+    # Determine winning model indices based on metric type
     if Metric_type == 2:
         winning_indices = np.argmax(Metric, axis=-1)
     else:
@@ -621,70 +605,61 @@ if Winning_models_map:
         winning_indices_nonref = np.argmax(Metric, axis=-1)
     else:
         winning_indices_nonref = np.argmin(Metric, axis=-1)
-    
-    # winning_indices_nonref now corresponds directly to indices in non_reference_models
-    # Extract the metric values for these winning models
-    # metric_winner: same shape as winning_indices_nonref, each entry is the winning model's metric value
+    # Extract the metric values for the winning models
     metric_winner = np.zeros_like(winning_indices_nonref, dtype=float)
     for z in range(parasiticSize):
         for m_ in range(memorySize):
             metric_winner[z, m_] = Metric[z, m_, winning_indices_nonref[z, m_]]
-    # Identify the winning models' names
+    # Identify the winning models' names for each cell
     winning_models_nonref = np.array(non_reference_models)[winning_indices_nonref]
-    # Get min and max of the winning metric values for normalization
-    metric_min = np.min(metric_winner)
-    metric_max = np.max(metric_winner)
-    if metric_min == metric_max:
-        # Avoid division by zero if all metrics are equal
-        metric_min = 0.0
-        metric_max = 1.0
-    # Prepare a 2D array of RGBA colors for the heatmap
-    # We'll blend between white (low metric) and the model's base color (high metric)
-    white = np.array([1.0, 1.0, 1.0])  # white color in RGB
-    cell_colors = np.zeros((parasiticSize, memorySize, 3))
-    # Create a dict mapping model to base RGB color
-    # We already have 'colors' as a list of colors for each model in enabled_models
-    # Convert colors to RGB if they are not already
-    from matplotlib.colors import to_rgb
     model_color_map = {model: to_rgb(c) for model, c in zip(enabled_models, colors)}
-    # Define a starting luminance that is not white but slightly darker gray
-    light_gray = np.array([0.9, 0.9, 0.9]) 
-    # Normalize and compute cell colors
+    cell_colors = np.zeros((parasiticSize, memorySize, 3))
     for z in range(parasiticSize):
         for m_ in range(memorySize):
             model = winning_models_nonref[z, m_]
             base_color = np.array(model_color_map[model])
+            pastel_color = (base_color + 4.0 * np.array([1.0, 1.0, 1.0])) / 5.0
             err_value = metric_winner[z, m_]
-            # Normalize error to [0,1]
-            scale = (err_value - metric_min) / (metric_max - metric_min)
-            # Interpolate color: light_gray at low error, base_color at high error
-            cell_color = light_gray * (1 - scale) + base_color * scale
+            # Clamp error between 0% and 30%
+            err_clamped = max(ERR_MIN, min(ERR_MAX, err_value))
+            scale = (err_clamped - ERR_MIN) / (ERR_MAX - ERR_MIN)
+            # Interpolate color: at scale=0 -> base_color, at scale=1 -> pastel_color
+            cell_color = base_color*(1 - scale) + pastel_color*scale
             cell_colors[z, m_] = cell_color
-    plt.figure(figsize=(6, 6))
-    plt.imshow(cell_colors, origin="lower", aspect="auto",
-            extent=[memoryWindow[0], memoryWindow[-1], parasiticResistance[0], parasiticResistance[-1]],
-            interpolation="nearest")
-    plt.xlabel("Memory Window")
-    plt.ylabel("Parasitic Resistance")
-    plt.title("Winning Models Map (Shaded by Error)")
-    # Create legend patches with base colors (full saturation) of winning models
+    # Plot the winning models map
+    fig, ax = plt.subplots(figsize=(7, 7))
+    im = ax.imshow(cell_colors, origin="lower", aspect="auto",
+                   extent=[memoryWindow[0], memoryWindow[-1], parasiticResistance[0], parasiticResistance[-1]],
+                   interpolation="nearest")
+    ax.set_xlabel("Memory Window", fontsize=16)
+    ax.set_ylabel("Parasitic Resistance", fontsize=16)
+    ax.set_title("Winning Models Map (Shaded by Error)", fontsize=18, pad=20)
+    ax.tick_params(labelsize=14)
+    # Remove old legend since we have the model bars
+    fig.subplots_adjust(bottom=0.3)
+    # Show model-specific bars again, each indicating 0% to 30% error range
     winning_models_unique = [model for model in enabled_models if model in np.unique(winning_models_nonref)]
-    legend_patches = [Patch(facecolor=model_color_map[model], label=model) for model in winning_models_unique]
-    # Move the legend to the bottom center of the figure
-    plt.legend(handles=legend_patches, loc="upper center", bbox_to_anchor=(0.5, -0.1), ncol=3)
-    # Create a grayscale colormap from light_gray to black for the colorbar
-    cmap_gray = LinearSegmentedColormap.from_list("gray_to_black", [light_gray, (0,0,0)], N=256)
-    sm = ScalarMappable(cmap=cmap_gray, norm=plt.Normalize(vmin=metric_min, vmax=metric_max))
-    sm.set_array([])
-    # Get current figure and axes
-    fig = plt.gcf()
-    ax = plt.gca()
-    # Add colorbar on the right side
-    cbar = fig.colorbar(sm, ax=ax, fraction=0.046, pad=0.04)
-    cbar.set_label("Relative error (%)")
-    # Adjust layout to avoid overlap
-    plt.tight_layout()
-    plt.savefig(folder + '/Figure_Winning_Models_Map_Shaded.png')
+    num_cbars = len(winning_models_unique)
+    bar_width = 0.8 / num_cbars
+    bar_height = 0.03
+    bar_y = 0.12  # position above bottom
+    for i, model in enumerate(winning_models_unique):
+        base_color = np.array(model_color_map[model])
+        pastel_color = (base_color + 2.0 * np.array([1.0, 1.0, 1.0])) / 3.0
+        gradient = np.linspace(0, 1, 256)
+        grad_colors = np.outer(np.ones_like(gradient), base_color)*(1 - gradient[:, None]) + \
+                      np.outer(np.ones_like(gradient), pastel_color)*gradient[:, None]
+        cbar_ax = fig.add_axes([0.1 + i*bar_width, bar_y, bar_width*0.8, bar_height])
+        cbar_im = cbar_ax.imshow([grad_colors], aspect='auto', interpolation='nearest')
+        cbar_ax.set_yticks([])
+        cbar_ax.set_xticks([0, 255])
+        # Show error range in percentages
+        cbar_ax.set_xticklabels(["0%", "30%"], fontsize=12)
+        cbar_ax.set_title(model, fontsize=14, pad=5)
+        for spine in cbar_ax.spines.values():
+            spine.set_color('black')
+        cbar_ax.tick_params(colors='black', labelsize=12)
+    plt.savefig(folder + '/Figure_Winning_Models_Map_Shaded.png', dpi=300)
     plt.show()
 
 
@@ -769,7 +744,7 @@ if scatter_plot:
     ax.tick_params(axis='both', which='major')
     # Inset axis for low-error models
     inset_ax = inset_axes(ax, width="60%", height="60%", loc='upper right')
-    threshold = 0.1  # Adjust as needed for "low-error" threshold
+    threshold = 100  # Adjust as needed for "low-error" threshold
     low_error_indices = [i for i, metric in enumerate(plot_Metric) if metric < threshold]
     if len(low_error_indices) > 0:
         inset_times = plot_times[low_error_indices]

@@ -23,16 +23,16 @@ if __name__ == '__main__':
     # Primary fixed parameters
     R_lrs = 1e3
     
-    parasitic_resistances = torch.arange(2, 2.1, 0.5).tolist()
+    parasitic_resistances = torch.arange(0.001, 2.1, 0.5).tolist()
     max_array_size = 784
-    model_functions = [ crosssim_model, dmr_model]
+    model_functions = [ IdealModel, crosssim_model, dmr_model, gamma_model, jeong_model, solve_passive_model]
     bias_correction = False
     debug_plot = True
     debug_index = 0
     plot_confusion = False
 
-    batch_size=128
-    test_samples = 1000
+    batch_size=16
+    test_samples = 20
 
     # Parameters to potentially sweep
     #R_hrs_values = torch.linspace(10000, 200000, steps=20).tolist()
@@ -94,19 +94,19 @@ if __name__ == '__main__':
     weights = torch.load(weights_path, map_location=device)
 
     # Data loading
-    #transform = transforms.Compose([
-    #    transforms.ToTensor(),
-    #    transforms.Lambda(lambda x: x / 2)  # Scale to [0,0.5]
-    #])
-
     transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,))
+       transforms.ToTensor(),
+       transforms.Lambda(lambda x: x / 2)  # Scale to [0,0.5]
     ])
+
+    # transform = transforms.Compose([
+    #     transforms.ToTensor(),
+    #     transforms.Normalize((0.1307,), (0.3081,))
+    # ])
 
     test_dataset = datasets.MNIST('./data', train=False, download=True, transform=transform)
     small_test_dataset = Subset(test_dataset, torch.arange(test_samples))
-    small_test_loader = DataLoader(small_test_dataset, batch_size=batch_size, shuffle=True)
+    small_test_loader = DataLoader(small_test_dataset, batch_size=batch_size, shuffle=False)
 
     # Results folder
     end = datetime.datetime.now(pytz.timezone('Europe/Rome'))

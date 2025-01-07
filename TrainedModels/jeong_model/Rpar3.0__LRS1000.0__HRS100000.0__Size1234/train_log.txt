@@ -1,0 +1,14 @@
+Training Log
+Model: jeong_model
+Parasitic Resistance: 3.0
+R_lrs: 1000.0
+R_hrs: 100000.0
+Max Array Size: 1234
+Hidden Layer Size: 128
+Batch Size: 128
+Learning Rate: 0.002
+Epochs: 20
+Early Stop Accuracy: 97.0%
+Final Training Accuracy: 82.01%
+Test Accuracy: 82.84%
+Total Training Time (s): 253.6025

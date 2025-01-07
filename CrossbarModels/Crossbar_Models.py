@@ -10,7 +10,8 @@ from .Functions.Spice_Functions import Create_NonLinear_Structure
 from .Functions.NonLinear import create_rram_model
 # Import Memtorch Solver
 from .Models.MemTorchModel import solve_passive
-from .Models import memtorch_bindings # type: ignore
+from .Models.MemTorch_float import memtorch_bindings as memtorch_bindings_float # type: ignore
+from .Models import memtorch_bindings# type: ignore
 # Import CrossSim Solver
 from .Models.CrossSimModel import CrossSim_Solve
 
@@ -519,7 +520,7 @@ class MemtorchModelCpp(CrossbarModel):
         V_WL = torch.from_numpy(Potential).to(torch.float32)
         V_BL = torch.from_numpy(np.zeros(R.shape[1])).to(torch.float32)
         
-        voltage_drops = memtorch_bindings.solve_passive(
+        voltage_drops = memtorch_bindings_float.solve_passive(
             conductance_matrix,
             V_WL,
             V_BL,
@@ -535,6 +536,29 @@ class MemtorchModelCpp(CrossbarModel):
 
         return voltage_drops_np, output_currents_np
     
+class MemtorchModelCpp_double(CrossbarModel):
+    def calculate(self, R, parasiticResistance, Potential, **kwargs):
+         # Call the `solve_passive` function (using the cpp implementation)
+        
+        conductance_matrix = torch.from_numpy(np.reciprocal(R))
+        V_WL = torch.from_numpy(Potential)
+        V_BL = torch.from_numpy(np.zeros(R.shape[1]))
+        
+        voltage_drops = memtorch_bindings.solve_passive(
+            conductance_matrix.double(),
+            V_WL,
+            V_BL,
+            parasiticResistance,
+            parasiticResistance,
+            det_readout_currents=False
+        )
+        
+        # Convert the output to numpy for plotting
+        voltage_drops_np = voltage_drops.cpu().detach().numpy()
+        # output_currents_np = output_currents.cpu().detach().numpy()
+        output_currents_np = np.sum(voltage_drops_np*np.reciprocal(R),axis=0)
+        
+        return voltage_drops_np, output_currents_np
 
 
 class MemtorchModelPython(CrossbarModel):

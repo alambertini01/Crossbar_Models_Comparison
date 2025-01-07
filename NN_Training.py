@@ -38,12 +38,12 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
 # Hyperparameters
-hiddenLayer = 64
+hiddenLayer = 128
 batch_size = 128
 learning_rate = 0.002
-epochs = 10
+epochs = 20
 save_checkpoint = False
-non_negative = True
+Fix_positive_weights = True
 early_stop_acc = 97.0
 
 # Data loading and preprocessing - using normalization for stability
@@ -66,7 +66,7 @@ weights = {
     'fc2_bias': torch.randn(10)
 }
 
-if non_negative:
+if Fix_positive_weights:
     weights['fc1_weights'] = torch.abs(weights['fc1_weights'])
     weights['fc2_weights'] = torch.abs(weights['fc2_weights'])
 
@@ -109,7 +109,7 @@ for epoch in range(epochs):
         loss.backward()
         optimizer.step()
 
-        if non_negative:
+        if Fix_positive_weights:
             with torch.no_grad():
                 for name, param in model.named_parameters():
                     if 'weight' in name:
