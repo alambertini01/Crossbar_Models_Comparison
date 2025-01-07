@@ -5,6 +5,8 @@ build/
 backups/
 LTSpice/
 Results/
+Important_Results/
+build/lib/CrossbarModels/
 data/
 .vscode/
 env/
