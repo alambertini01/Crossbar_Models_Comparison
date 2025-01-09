@@ -280,7 +280,7 @@ else:
 angles = [n / float(len(labels)) * 2 * np.pi for n in range(len(labels))]
 angles += angles[:1]  # Repeat the first angle to close the polygon
 # Radar plot setup
-fig, ax = plt.subplots(figsize=(10, 10), subplot_kw={'polar': True})
+fig, ax = plt.subplots(figsize=(8, 6), subplot_kw={'polar': True})
 ax.spines['polar'].set_visible(False)
 ax.set_facecolor('#f9f9f9')
 ax.grid(color='gray', linestyle='--', linewidth=0.5, alpha=0.5)
