@@ -1,4 +1,4 @@
-# Crossbar Parasitics Simulator
+# Crossbar Parasitic Models Simulator
 ## Overview
 The Crossbar Parasitics Simulator is a comprehensive tool for analyzing parasitic effects in crossbar arrays. It consists of two main components:
 1. **Model Comparison**: Benchmarks different parasitic resistance models from literature
