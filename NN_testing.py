@@ -23,20 +23,20 @@ if __name__ == '__main__':
     # Primary fixed parameters
     R_lrs = 1e3
     
-    parasitic_resistances = torch.arange(0.001, 2.1, 0.5).tolist()
-    max_array_size = 784
-    model_functions = [ IdealModel, crosssim_model, dmr_model, gamma_model, jeong_model, solve_passive_model]
+    parasitic_resistances = torch.arange(0.00001, 3, 0.1).tolist()
+    max_array_size = 16
+    model_functions = [ crosssim_model]
     bias_correction = False
-    debug_plot = True
+    debug_plot = False
     debug_index = 0
     plot_confusion = False
 
-    batch_size=16
-    test_samples = 20
+    batch_size=64
+    test_samples = 1000
 
     # Parameters to potentially sweep
     #R_hrs_values = torch.linspace(10000, 200000, steps=20).tolist()
-    R_hrs_values = 100000
+    R_hrs_values = 40000
     bits_values = 0
 
     # *************** Determine Sweeps ***************
@@ -93,16 +93,16 @@ if __name__ == '__main__':
         exit()
     weights = torch.load(weights_path, map_location=device)
 
-    # Data loading
-    transform = transforms.Compose([
-       transforms.ToTensor(),
-       transforms.Lambda(lambda x: x / 2)  # Scale to [0,0.5]
-    ])
-
+    # # Data loading
     # transform = transforms.Compose([
-    #     transforms.ToTensor(),
-    #     transforms.Normalize((0.1307,), (0.3081,))
+    #    transforms.ToTensor(),
+    #    transforms.Lambda(lambda x: x / 2)  # Scale to [0,0.5]
     # ])
+
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.1307,), (0.3081,))
+    ])
 
     test_dataset = datasets.MNIST('./data', train=False, download=True, transform=transform)
     small_test_dataset = Subset(test_dataset, torch.arange(test_samples))

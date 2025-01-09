@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from mapping import weight_mapping, output_unmapping, quantization
 from CrossbarModels.Crossbar_Models_pytorch import IdealModel
-from plot_utils import plot_data
 
 
 class CustomLayer(nn.Module):

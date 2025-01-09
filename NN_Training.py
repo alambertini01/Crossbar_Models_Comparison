@@ -29,9 +29,12 @@ selected_model_name = list(available_models.keys())[model_choice]
 selected_model_function = available_models[selected_model_name]
 
 parasiticResistance = float(input("Enter parasitic resistance value: "))
-R_lrs = float(input("Enter R_lrs value: "))
-R_hrs = float(input("Enter R_hrs value: "))
+# R_lrs = float(input("Enter R_lrs value: "))
+R_lrs = 1000
+# R_hrs = float(input("Enter R_hrs value: "))
+R_hrs = 40000
 max_array_size = int(input("Enter max_array_size value: "))
+quant_bits = 0
 
 # Check for GPU
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -43,8 +46,8 @@ batch_size = 128
 learning_rate = 0.002
 epochs = 20
 save_checkpoint = False
-Fix_positive_weights = True
-early_stop_acc = 97.0
+Fix_positive_weights = False
+early_stop_acc = 99.8
 
 # Data loading and preprocessing - using normalization for stability
 transform = transforms.Compose([
@@ -78,7 +81,7 @@ weights['fc2_bias'].fill_(0.0)
 
 # Initialize the model and move to GPU
 model = CustomNet(weights, parasiticResistance, R_hrs, R_lrs, selected_model_function, device,
-                  debug=False, bits=0, correction=False, max_array_size=max_array_size).to(device)
+                  debug=False, bits=quant_bits, correction=False, max_array_size=max_array_size).to(device)
 
 # Initialize optimizer and loss function
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)

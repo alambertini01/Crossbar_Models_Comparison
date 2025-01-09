@@ -49,15 +49,15 @@ reference_model = "CrossSim4"
 # SWEEP PARAMETERS
 
 # Dimensions of the crossbar
-array_size = np.arange(24,150,16)
+array_size = np.arange(32,64,16)
 # Sparsity of the matrix
-Rhrs_percentage=np.arange(50,51,20)
+Rhrs_percentage=np.arange(50,50.1,10)
 # parasitic resistance value
-parasiticResistance = np.arange(0.1, 3, 0.3)
+parasiticResistance = np.arange(0.1, 5, 0.1)
 # Memory window (ratio between Hrs and Lrs)
-memoryWindow = np.arange(20, 100.1, 20)
+memoryWindow = np.arange(20, 20.1, 20)
 # Number of different varaibility instances
-variabilitySize = 5
+variabilitySize = 100
 
 
 # Flag to enable/disable the visualization of the first model

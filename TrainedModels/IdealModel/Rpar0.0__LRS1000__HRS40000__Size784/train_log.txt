@@ -1,0 +1,14 @@
+Training Log
+Model: IdealModel
+Parasitic Resistance: 0.0
+R_lrs: 1000
+R_hrs: 40000
+Max Array Size: 784
+Hidden Layer Size: 128
+Batch Size: 128
+Learning Rate: 0.002
+Epochs: 20
+Early Stop Accuracy: 99.8%
+Final Training Accuracy: 99.49%
+Test Accuracy: 97.72%
+Total Training Time (s): 205.3697
