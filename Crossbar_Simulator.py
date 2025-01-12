@@ -32,7 +32,7 @@ from CrossbarModels.Crossbar_Models_pytorch import gamma_model, dmr_model, jeong
 ############################ PARAMETERS ##############################
 
 # Dimensions of the crossbar
-input,output = (128,128)
+input,output = (32,32)
 
 # Initialize each model instance
 Models = [
@@ -73,23 +73,23 @@ new_model_functions = {
     "Jeong_torch": jeong_model,
     "CrossSim_torch" : crosssim_model
 }
-enabled_models = [ "Ideal","Jeong","DMR","Gamma","Gamma_torch","DMR_torch","Jeong_torch", "CrossSim_torch"]
-enabled_models = [ "Ideal","Jeong","DMR","Gamma","CrossSim1","CrossSim2", "CrossSim3", "CrossSim4", "CrossSim5", "CrossSim6", "CrossSim7", "CrossSim8", "Memtorch", "NgSpice"]
+enabled_models = [ "Ideal","Jeong","DMR","Gamma"]
+# enabled_models = [ "Ideal","Jeong","DMR","Gamma","CrossSim1","CrossSim2", "CrossSim3", "CrossSim4", "CrossSim5", "CrossSim6", "CrossSim7", "CrossSim8", "Memtorch", "NgSpice"]
 # enabled_models = [model.name for model in Models]
-# enabled_models = [ "Ideal","Jeong_avgv2","DMR","Gamma","CrossSim1","CrossSim2","CrossSim3","CrossSim4","CrossSim5","CrossSim6","CrossSim7","CrossSim8","CrossSim9","CrossSim10","Memtorch","NgSpice"]
 
 reference_model =  "CrossSim9"
+reference_model =  "CrossSim8"
 
 # Low resistance proggramming value
 R_lrs = 1000
 Rhrs_percentage=50
 # parasitic resistance value
 parasiticResistance = np.arange(0.2, 5, 0.2)
-parasiticResistance = np.array([2])
+# parasiticResistance = np.array([2])
 
 # Memory window (ratio between Hrs and Lrs)
 memoryWindow = np.arange(5, 101, 5)
-memoryWindow = np.array([100])
+# memoryWindow = np.array([40])
 
 # Input voltages parameters
 v_On_percentage = 100
@@ -100,8 +100,7 @@ Metric_type = 1
 
 # Variability parameters
 v_flag = 0
-v_size = 2
-
+v_size = 200
 
 
 ############################ INITIALIZATIONS ############################
@@ -304,22 +303,22 @@ plt.rcParams.update({
 })
 
 # Figures Selection
-Simulation_times_plot = 1
+Simulation_times_plot = 0
 
-Absolute_current_plots = 1
-Relative_error_plots = 1
+Absolute_current_plots = 0
+Relative_error_plots = 0
 
-Voltage_drops_plot = 1
+Voltage_drops_plot = 0
 Voltage_drops_error_plot = 0
 
-Metric_plot = 1
-Mean_Metric_plot = 1
-Metric_vs_Rpar = 1
-Metric_vs_MW = 1
+Metric_plot = 0
+Mean_Metric_plot = 0
+Metric_vs_Rpar = 0
+Metric_vs_MW = 0
 Winning_models_map = 1
 print_table = 0
 scatter_plot = 1
-spider_plot = 1
+spider_plot = 0
 
 Resistance_heatmap =0
 open_folder = 1
@@ -593,7 +592,7 @@ if print_table:
 # Compute the winning model for each parasiticResistance vs. memoryWindow combination
 if Winning_models_map:
     # Fixed error scale: 0% to 30%
-    ERR_MIN, ERR_MAX = 0, 30
+    ERR_MIN, ERR_MAX = 0, 20
     model_labels = np.array(enabled_models)
     # Determine winning model indices based on metric type
     if Metric_type == 2:
@@ -627,7 +626,7 @@ if Winning_models_map:
             cell_color = base_color*(1 - scale) + pastel_color*scale
             cell_colors[z, m_] = cell_color
     # Plot the winning models map
-    fig, ax = plt.subplots(figsize=(7, 7))
+    fig, ax = plt.subplots(figsize=(5, 5))
     im = ax.imshow(cell_colors, origin="lower", aspect="auto",
                    extent=[memoryWindow[0], memoryWindow[-1], parasiticResistance[0], parasiticResistance[-1]],
                    interpolation="nearest")
@@ -643,18 +642,19 @@ if Winning_models_map:
     bar_width = 0.8 / num_cbars
     bar_height = 0.03
     bar_y = 0.12  # position above bottom
+    spacing = 0.02  # Adjust this value to control the spacing
     for i, model in enumerate(winning_models_unique):
         base_color = np.array(model_color_map[model])
         pastel_color = (base_color + 2.0 * np.array([1.0, 1.0, 1.0])) / 3.0
         gradient = np.linspace(0, 1, 256)
         grad_colors = np.outer(np.ones_like(gradient), base_color)*(1 - gradient[:, None]) + \
                       np.outer(np.ones_like(gradient), pastel_color)*gradient[:, None]
-        cbar_ax = fig.add_axes([0.1 + i*bar_width, bar_y, bar_width*0.8, bar_height])
+        cbar_ax = fig.add_axes([0.1 + i*(bar_width + spacing), bar_y, bar_width*0.8, bar_height])
         cbar_im = cbar_ax.imshow([grad_colors], aspect='auto', interpolation='nearest')
         cbar_ax.set_yticks([])
         cbar_ax.set_xticks([0, 255])
         # Show error range in percentages
-        cbar_ax.set_xticklabels(["0%", "30%"], fontsize=12)
+        cbar_ax.set_xticklabels(["0%", str(ERR_MAX)+"%"], fontsize=12)
         cbar_ax.set_title(model, fontsize=14, pad=5)
         for spine in cbar_ax.spines.values():
             spine.set_color('black')
@@ -687,7 +687,7 @@ if scatter_plot:
     model_to_color = {model: color for model, color in zip(enabled_models, colors)}
     plot_colors = [model_to_color[m] for m in plot_models]
     # Create a larger figure for better readability
-    fig, ax = plt.subplots(figsize=(9, 6)) 
+    fig, ax = plt.subplots(figsize=(5, 5)) 
     # Identify CrossSim models among the plotted models
     crosssim_indices = [i for i, model in enumerate(plot_models) if model.startswith("CrossSim")]
     # If multiple CrossSim models are present, perform a regression on them
@@ -731,15 +731,15 @@ if scatter_plot:
             plt.Line2D([0], [0], color='blue', linestyle='--', label='CrossSim Regression')
         )
     # Add the legend with larger font size
-    ax.legend(handles=legend_handles, title="Models",
-              bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
+    #ax.legend(handles=legend_handles, title="Models",
+    #          bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
     # Set x-scale to log
     ax.set_xscale('log')
     # Set labels with larger font sizes
     ax.set_xlabel('Normalized Simulation Time (log scale)' if "Ideal" in enabled_models else 'Execution Time (seconds, log scale)', fontsize=14)
     ax.set_ylabel(error_label, fontsize=14)
     # Set title with larger font size
-    ax.set_title('Scatter Plot' + ' (' + array_size_string +  ')\n')
+    # ax.set_title('Scatter Plot' + ' (' + array_size_string +  ')\n')
     # Adjust tick parameters for larger font sizes
     ax.tick_params(axis='both', which='major')
     # Inset axis for low-error models
@@ -782,7 +782,7 @@ if scatter_plot:
         # Add grid
         inset_ax.grid(True, which="both", linestyle='--', linewidth=0.5, alpha=0.7)
         # Set title with larger font size
-        inset_ax.set_title("Logarithmic Zoom", fontsize=14)
+        #inset_ax.set_title("Logarithmic Scale", fontsize=14)
         # Adjust tick parameters for larger font sizes
         inset_ax.tick_params(axis='both', which='major')
     # Adjust layout to accommodate legend
