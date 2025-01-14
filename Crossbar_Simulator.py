@@ -47,6 +47,8 @@ Models = [
     GammaModel("Gamma_torch"),
     GammaModel_acc("Gamma_acc_v1"),
     GammaModel_acc_v2("Gamma"),
+    alpha_beta("alpha_beta"),
+    alpha_beta_acc("alpha_beta_acc"),
     CrossSimModel("CrossSim_ref"),
     CrossSimModel("CrossSim1",Verr_th=0.5),
     CrossSimModel("CrossSim2",Verr_th=1e-1),
@@ -73,7 +75,7 @@ new_model_functions = {
     "Jeong_torch": jeong_model,
     "CrossSim_torch" : crosssim_model
 }
-enabled_models = [ "Ideal","Jeong","DMR","Gamma"]
+enabled_models = [ "Ideal","Jeong","DMR","Gamma", "alpha_beta_acc", "DMR_acc"]
 # enabled_models = [ "Ideal","Jeong","DMR","Gamma","CrossSim1","CrossSim2", "CrossSim3", "CrossSim4", "CrossSim5", "CrossSim6", "CrossSim7", "CrossSim8", "Memtorch", "NgSpice"]
 # enabled_models = [model.name for model in Models]
 
@@ -85,11 +87,11 @@ R_lrs = 1000
 Rhrs_percentage=50
 # parasitic resistance value
 parasiticResistance = np.arange(0.2, 5, 0.2)
-# parasiticResistance = np.array([2])
+parasiticResistance = np.array([2])
 
 # Memory window (ratio between Hrs and Lrs)
 memoryWindow = np.arange(5, 101, 5)
-# memoryWindow = np.array([40])
+memoryWindow = np.array([40])
 
 # Input voltages parameters
 v_On_percentage = 100
@@ -100,7 +102,7 @@ Metric_type = 1
 
 # Variability parameters
 v_flag = 0
-v_size = 200
+v_size = 100
 
 
 ############################ INITIALIZATIONS ############################
@@ -303,15 +305,15 @@ plt.rcParams.update({
 })
 
 # Figures Selection
-Simulation_times_plot = 0
+Simulation_times_plot = 1
 
-Absolute_current_plots = 0
-Relative_error_plots = 0
+Absolute_current_plots = 1
+Relative_error_plots = 1
 
-Voltage_drops_plot = 0
+Voltage_drops_plot = 1
 Voltage_drops_error_plot = 0
 
-Metric_plot = 0
+Metric_plot = 1
 Mean_Metric_plot = 0
 Metric_vs_Rpar = 0
 Metric_vs_MW = 0

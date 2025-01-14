@@ -188,70 +188,63 @@ class DMRModel_acc(CrossbarModel):
         voltage_drops_dmr = A_dmr @ V_a_matrix @ B_dmr
 
         return voltage_drops_dmr, current_dmr
-    
+
+
+
 class DMRModel_new(CrossbarModel):
     def calculate(self, R, parasiticResistance, Potential, **kwargs):
-        input_size, output_size = R.shape
-        G = np.reciprocal(R)
-        g_bit = 1/parasiticResistance
-        g_word = 1/parasiticResistance
+        m, n = R.shape
+        G = 1.0 / R
+        g_bit = 1.0 / parasiticResistance
+        g_word = 1.0 / parasiticResistance
 
-        # Precompute means
-        gAverageRow = G.mean(axis=1)  # shape: (input_size,)
-        gAverageCol = G.mean(axis=0)  # shape: (output_size,)
+        # Row-average and column-average conductances
+        gAvgRow = G.mean(axis=1)   # shape (m,)
+        gAvgCol = G.mean(axis=0)   # shape (n,)
 
-        # Precompute summation_bit (constant for all j)
-        # Summation_bit = sum_{k=0}^{input_size-1} (input_size - k)*gAverageRow[k]
-        # = dot((input_size - np.arange(input_size)), gAverageRow)
-        Summation_bit = (input_size - np.arange(input_size)) @ gAverageRow
+        #================= a_dmr =================
+        # Prefix sums, each of length (m+1) so cRowPad[i] = sum of gAvgRow[:i]
+        cRowPad  = np.concatenate(([0], np.cumsum(gAvgRow)))
+        ckRowPad = np.concatenate(([0], np.cumsum(np.arange(m) * gAvgRow)))
+        # Denominator: sum_{k=0}^{m-1}(m-k)*gAvgRow[k] 
+        # => m*sum(gAvgRow) - sum(k*gAvgRow[k])
+        denom_a = m * cRowPad[m] - ckRowPad[m]
+        # For each i in [0..m-1], numerator = i*sum_{k=0}^{i-1}(gAvgRow[k]) - sum_{k=0}^{i-1}(k*gAvgRow[k])
+        iRow = np.arange(m)
+        num_a = iRow * cRowPad[iRow] - ckRowPad[iRow]
+        a_dmr = (1.0 + num_a/g_bit) / (1.0 + denom_a/g_bit)  # shape (m,)
 
-        # Prefix sums for gAverageRow
-        # prefix_sum_gAR[i] = sum of gAverageRow[0:i]
-        prefix_sum_gAR = np.concatenate(([0], np.cumsum(gAverageRow)))
-        # prefix_sum_k_gAR[i] = sum of k*gAverageRow[k] for k in [0:i-1]
-        prefix_sum_k_gAR = np.concatenate(([0], np.cumsum(np.arange(input_size)*gAverageRow)))
+        #================= b_dmr =================
+        kCol = np.arange(n)
+        # Summation_word = sum_{k=0}^{n-1} (k+1)*gAvgCol[k]
+        sum_word = np.sum((kCol + 1) * gAvgCol)
 
-        # Compute Summation1 for all j simultaneously:
-        # Summation1_j = sum_{k=0}^{j-1} (j-k)*gAverageRow[k]
-        # = j*sum_{k=0}^{j-1} gAverageRow[k] - sum_{k=0}^{j-1} k*gAverageRow[k]
-        # = j*prefix_sum_gAR[j] - prefix_sum_k_gAR[j]
-        j_indices = np.arange(input_size)
-        Summation1_array = j_indices * prefix_sum_gAR[j_indices] - prefix_sum_k_gAR[j_indices]
+        # Prefix sums along columns, each of length (n+1)
+        cColPad  = np.concatenate(([0], np.cumsum(gAvgCol)))         # cColPad[k] = sum(gAvgCol[:k])
+        ckColPad = np.concatenate(([0], np.cumsum(kCol*gAvgCol)))    # ckColPad[k] = sum_{p=0..k-1}(p*gAvgCol[p])
 
-        # a_dmr[j] = (1 + Summation1_j/g_bit) / (1 + Summation_bit/g_bit)
-        a_dmr = (1 + Summation1_array/g_bit) / (1 + Summation_bit/g_bit)
+        # part1 = sum_{k=j}^{n-1}(k*gAvgCol[k]) => ckColPad[n] - ckColPad[j]
+        # part2 = j * sum_{k=j}^{n-1}(gAvgCol[k]) => j*(cColPad[n] - cColPad[j])
+        # We want arrays of length n, so slice [ :n ]
+        part1 = ckColPad[n] - ckColPad[:n]
+        part2 = (cColPad[n] - cColPad[:n]) * kCol
+        num_b = part1 - part2
+        b_dmr = (1.0 + num_b/g_word) / (1.0 + sum_word/g_word)  # shape (n,)
 
-        # Precompute summation_word (constant for all j)
-        # Summation_word = sum_{k=1}^{output_size} k*gAverageCol[k-1]
-        # = sum_{k=0}^{output_size-1} (k+1)*gAverageCol[k]
-        Summation_word = (np.arange(1, output_size+1) @ gAverageCol)
-
-        # Prefix sums for gAverageCol
-        prefix_sum_gAC = np.concatenate(([0], np.cumsum(gAverageCol)))
-        prefix_sum_k_gAC = np.concatenate(([0], np.cumsum(np.arange(output_size)*gAverageCol)))
-
-        # Compute Summation2 for all j simultaneously:
-        # Summation2_j = sum_{k=j}^{output_size-1} (k-j)*gAverageCol[k]
-        # = (sum_{k=j}^{output_size-1} k*gAverageCol[k]) - j*(sum_{k=j}^{output_size-1} gAverageCol[k])
-        # = (prefix_sum_k_gAC[output_size]-prefix_sum_k_gAC[j]) - j*(prefix_sum_gAC[output_size]-prefix_sum_gAC[j])
-        j_out = np.arange(output_size)
-        Summation2_array = (prefix_sum_k_gAC[-1] - prefix_sum_k_gAC[j_out]) - j_out*(prefix_sum_gAC[-1]-prefix_sum_gAC[j_out])
-
-        # b_dmr[j] = (1 + Summation2_j/g_word) / (1 + Summation_word/g_word)
-        b_dmr = (1 + Summation2_array/g_word)/(1 + Summation_word/g_word)
-
-        # Diagonal matrices A and B
+        # Diagonal matrices
         A_dmr = np.diag(a_dmr)
         B_dmr = np.diag(b_dmr)
-        
-        # Compute W_dmr
+
+        # Final effective matrix
         W_dmr = A_dmr @ G @ B_dmr
 
-        # V_a_matrix = tile of Potential to match output dimension
-        V_a_matrix = np.tile(Potential.reshape(-1, 1), output_size)
+        # Voltage broadcast
+        Va_mat = Potential.reshape(-1, 1)  # shape (m,1)
+        Va_mat = np.broadcast_to(Va_mat, (m, n))
 
-        current_dmr = Potential @ W_dmr
-        voltage_drops_dmr = A_dmr @ V_a_matrix @ B_dmr
+        # Outputs
+        current_dmr = Potential @ W_dmr   # shape (n,)
+        voltage_drops_dmr = A_dmr @ Va_mat @ B_dmr  # shape (m,n)
 
         return voltage_drops_dmr, current_dmr
 
@@ -382,11 +375,11 @@ class GammaModel_acc_v2(CrossbarModel):
         X = (input * (input -1)) / 2 * G_mean
         g=1/parasiticResistance
 
-        # Calculate a_dmr[0]
+        # Calculate a_alpha_beta[0]
         weights = np.arange(input, 0, -1)  # [input, input-1, ..., 1]
         Summation_bit = np.sum(weights * gAverageRow)
         alpha_gm_0 = 1 / (1 + Summation_bit / g_bit)
-        # Calculate b_dmr[output-1]
+        # Calculate b_alpha_beta[output-1]
         k_arr = np.arange(1, output + 1)
         Summation_word = np.sum(k_arr * gAverageCol[k_arr-1])
         beta_gm_last = 1 / (1 + Summation_word / g_word)
@@ -431,6 +424,94 @@ class GammaModel_acc_v2(CrossbarModel):
         current_gamma = Potential @ (alpha_gm * G * beta_gm.T)
 
         return  voltage_drops_gamma, current_gamma
+
+
+
+class alpha_beta(CrossbarModel):
+    def calculate(self, R, parasiticResistance, Potential, **kwargs):
+
+        input, output = R.shape
+        G = np.reciprocal(R)
+        I = G * np.max(Potential)
+        # Initialize alpha and beta matrices
+        alpha_gm = np.zeros((input, output))
+        beta_gm = np.zeros((input, output))
+        g_bit = 1/parasiticResistance
+        g_word = 1/parasiticResistance
+
+        # Compute alpha values
+        for i in range(input):
+            for j in range(output):
+                num_alpha = I[0, j] * g_bit + sum((i - k) * I[k, j] for k in range(i)) * G[0, j]
+                denom_alpha = I[0, j] * g_bit  + sum((input - k) * I[k, j] for k in range(input)) * G[0, j]
+                alpha_gm[i, j] = num_alpha / denom_alpha
+
+        # Compute beta values
+        for i in range(input):
+            for j in range(output):
+                num_beta = I[i, output-1] * g_word + sum((k - 1) * I[i, j + k - 1] for k in range(1, output - j + 1)) * G[i, output-1]
+                denom_beta = I[i, output-1] * g_word + sum(k * I[i, k - 1] for k in range(1, output + 1)) * G[i, output-1]
+                beta_gm[i, j] = num_beta / denom_beta
+                
+        V_a_matrix = np.tile(Potential.reshape(-1, 1), output)
+        voltage_drops_gamma = alpha_gm * V_a_matrix * beta_gm
+        current_gamma = Potential @ (alpha_gm * G * beta_gm)
+
+        return  voltage_drops_gamma, current_gamma
+    
+class alpha_beta_acc(CrossbarModel):
+    def calculate(self, R, parasiticResistance, Potential, **kwargs):
+
+        input_size, output_size = R.shape
+        # Conductances
+        G = np.reciprocal(R)  # shape: (input_size, output_size)
+        I = G * np.max(Potential)  # shape: (input_size, output_size)
+
+        # Parasitic conductances
+        g_bit = 1.0 / parasiticResistance
+        g_word = 1.0 / parasiticResistance
+        cumsumI_cols = np.zeros((input_size+1, output_size))
+        cumsumK_I_cols = np.zeros((input_size+1, output_size))
+        # Compute the cumsums
+        cumsumI_cols[1:] = np.cumsum(I, axis=0)               # shape: (input_size, output_size)
+        cumsumK_I_cols[1:] = np.cumsum((np.arange(input_size)[:, None] * I), axis=0)
+        denomSum = (
+            input_size * cumsumI_cols[input_size, :]  # shape: (output_size,)
+            - cumsumK_I_cols[input_size, :]
+        )  # shape: (output_size,)
+        i2D = np.arange(input_size)[:, None]  # shape: (input_size,1)
+        topAlpha = (
+            I[0, :] * g_bit  # shape: (output_size,)
+            + G[0, :] * (i2D * cumsumI_cols[:input_size, :] - cumsumK_I_cols[:input_size, :])
+        )
+        botAlpha = (
+            I[0, :] * g_bit
+            + G[0, :] * denomSum
+        )
+        alpha_gm = topAlpha / botAlpha  # shape: (input_size, output_size)
+        cumsumI_rows = np.zeros((input_size, output_size+1))
+        cumsumP_I_rows = np.zeros((input_size, output_size+1))
+
+        cumsumI_rows[:, 1:] = np.cumsum(I, axis=1)          # shape: (input_size, output_size)
+        cumsumP_I_rows[:, 1:] = np.cumsum((np.arange(output_size) * I), axis=1)
+        I_colEnd = I[:, output_size - 1]     # shape: (input_size,)
+        G_colEnd = G[:, output_size - 1]     # shape: (input_size,)
+        cPI_end  = cumsumP_I_rows[:, output_size]  # shape: (input_size,)
+        cI_end   = cumsumI_rows[:, output_size]     # shape: (input_size,)
+        denomBeta = I_colEnd * g_word + G_colEnd * (cPI_end + cI_end)  # shape: (input_size,)
+        j2D = np.arange(output_size)[None, :]  # shape: (1, output_size)
+        partialSumBeta = (
+            (cPI_end[:, None] - cumsumP_I_rows[:, :output_size])
+            - j2D * (cI_end[:, None] - cumsumI_rows[:, :output_size])
+        ) 
+        numBeta = I_colEnd[:, None] * g_word + G_colEnd[:, None] * partialSumBeta
+        beta_gm = numBeta / denomBeta[:, None]  # shape: (input_size, output_size)
+        V_a_matrix = np.tile(Potential.reshape(-1, 1), (1, output_size))  # (input_size, output_size)
+        voltage_drops_gamma = alpha_gm * V_a_matrix * beta_gm  # (input_size, output_size)
+        current_gamma = Potential @ (alpha_gm * G * beta_gm)  # shape: (output_size,)
+
+        return voltage_drops_gamma, current_gamma
+    
 
 
 class CrossSimModel(CrossbarModel):
