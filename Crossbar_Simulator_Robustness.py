@@ -22,8 +22,8 @@ Models = [
     JeongModel_avgv2("Jeong_torch"),
     IdealModel("Ideal"),
     DMRModel("DMR_old"),
-    DMRModel_acc("DMR_acc"),
-    DMRModel_new("DMR"),
+    DMRModel_acc("DMR"),
+    DMRModel_new("DMR_v2"),
     DMRModel_new("DMR_torch"),
     GammaModel("Gamma_torch"),
     GammaModel_acc("Gamma_acc_v1"),
@@ -44,7 +44,7 @@ Models = [
 ]
 
 # Enabled models
-enabled_models = ["Ideal", "Jeong_avg", "DMR", "γ", "alpha-beta"]
+enabled_models = ["Ideal", "Jeong_avg", "DMR", "alpha-beta"]
 reference_model = "CrossSim7"
 enabled_models.append(reference_model)
 
@@ -52,16 +52,18 @@ modelSize = len(enabled_models)
 show_first_model = False
 current_Metric = 1
 
+robustness_flag = True  # Enable/disable 1D-slice robustness computation
+
 # Crossbar dimensions sweep
-array_size = np.arange(32, 64, 16)
+array_size = np.arange(32, 128, 16)
 # Sparsity of the matrix
-Rhrs_percentage = np.arange(10, 100, 10)
+Rhrs_percentage = np.arange(10, 100, 20)
 # Parasitic resistance
-parasiticResistance = np.arange(0.1, 5, 0.5)
+parasiticResistance = np.arange(0.1, 5, 1)
 # Memory window (ratio Hrs/Lrs)
-memoryWindow = np.arange(20, 20.1, 20)
+memoryWindow = np.arange(20, 100, 20)
 # Number of different variability instances
-variabilitySize = 100
+variabilitySize = 5
 
 # Low resistance programming value
 R_lrs = 1000
@@ -196,6 +198,8 @@ colors = [
     else "#{:06x}".format(random.randint(0, 0xFFFFFF))
     for model in enabled_models
 ]
+model_colors = colors[:len(enabled_models)]
+
 markers = ['o', 's', 'D', '^', 'v', 'p']
 plt.rcParams.update({
     'font.size': 14,
@@ -238,68 +242,177 @@ plt.grid(True, which="both", linestyle='--', linewidth=0.5)
 plt.savefig(folder + '/Figure_SimulationTimes_vs_ArraySize.png')
 plt.show()
 
-###################### 2) Spider Plot (Radar) ########################
-sum_simulation_times = np.sum(simulation_times, axis=1)
-current_error_mean = np.mean(Current_error, axis=(0, 1, 2, 3, 4))
-voltage_error_mean = np.mean(Voltage_error, axis=(0, 1, 2, 3, 4))
 
-# Compute robustness metrics
-robustness_metrics = {
-    'Array Size Robustness': np.reciprocal(np.mean(np.std(Metric, axis=0), axis=(0, 1, 2, 3))[:-1]),
-    'Parasitic Resistance Robustness': np.reciprocal(np.mean(np.std(Metric, axis=1), axis=(0, 1, 2, 3))[:-1]),
-    'Memory Window Robustness': np.reciprocal(np.mean(np.std(Metric, axis=2), axis=(0, 1, 2, 3))[:-1]),
-    'Variability Robustness': np.reciprocal(np.mean(np.std(Metric, axis=3), axis=(0, 1, 2, 3))[:-1]),
-    'Sparsity Robustness': np.reciprocal(np.mean(np.std(Metric, axis=4), axis=(0, 1, 2, 3))[:-1])
-}
 
-# Base metrics
-base_metrics = {
-    'Current Accuracy': 1 / current_error_mean[:-1],
-    'Voltage Accuracy': 1 / voltage_error_mean[:-1],
-    'Simulation Speed': 1 / sum_simulation_times[:-1]
-}
 
-all_metrics = {**base_metrics, **robustness_metrics}
-valid_metrics = {k: v for k, v in all_metrics.items() if np.all(np.isfinite(v))}
+######################## SPIDER PLOT FUNCTION ########################
+def find_nearest_index(array, value):
+    """Find the index of the array element closest to `value`."""
+    array_np = np.array(array)
+    return np.abs(array_np - value).argmin()
 
-labels = list(valid_metrics.keys())
-metrics = np.array(list(valid_metrics.values()))
+def plot_spider_chart(base_metrics, robustness_metrics, param_values_str, save_folder="Results"):
+    """
+    Plots a radar (spider) chart for the computed metrics.
+    param_values_str is a string appended to the saved figure name, 
+    e.g. "_as48_pr1.3_mw20_var50_rsp50".
+    """
+    # Merge metrics
+    all_metrics = {**base_metrics, **robustness_metrics}
+    valid_metrics = {k: v for k, v in all_metrics.items() if np.all(np.isfinite(v))}
+    labels = list(valid_metrics.keys())
+    metrics = np.array(list(valid_metrics.values()))
 
-# Normalize to [0,1]
-if show_first_model:
-    metrics_scaled = metrics / metrics.max(axis=1, keepdims=True)
-else:
-    metrics_scaled = metrics / metrics[:, 1:].max(axis=1, keepdims=True)
+    # Radar plot angles
+    angles = [n / float(len(labels)) * 2 * np.pi for n in range(len(labels))]
+    angles += angles[:1]
 
-angles = [n / float(len(labels)) * 2 * np.pi for n in range(len(labels))]
-angles += angles[:1]
+    # Normalize metrics to [0,1]
+    if show_first_model:
+        metrics_scaled = metrics / metrics.max(axis=1, keepdims=True)
+    else:
+        metrics_scaled = metrics / metrics[:, 1:].max(axis=1, keepdims=True)
 
-fig, ax = plt.subplots(figsize=(7, 5), subplot_kw={'polar': True})
-ax.spines['polar'].set_visible(False)
-ax.set_facecolor('#f9f9f9')
-ax.grid(color='gray', linestyle='--', linewidth=0.5, alpha=0.5)
-ax.set_yticks([])
-ax.set_rgrids([0.2, 0.4, 0.6, 0.8, 1.0],
-              labels=['0.2', '0.4', '0.6', '0.8', '1.0'],
-              angle=0,
-              color='gray',
-              alpha=0.2)
+    # Create plot
+    fig, ax = plt.subplots(figsize=(8, 6), subplot_kw={'polar': True})
+    ax.spines['polar'].set_visible(False)
+    ax.set_facecolor('#f9f9f9')
+    ax.set_yticks([])
+    ax.set_rgrids([0.2, 0.4, 0.6, 0.8, 1.0],
+                  labels=['0.2', '0.4', '0.6', '0.8', '1.0'],
+                  angle=0,
+                  color='gray',
+                  alpha=0.2)
 
-model_colors = colors[:len(enabled_models)]
-for i, (model_name, color) in enumerate(zip(enabled_models[:-1], model_colors)):
-    if i == 0 and not show_first_model:
+    model_colors = colors[:len(enabled_models)]
+    for i, (model_name, color) in enumerate(zip(enabled_models[:-1], model_colors)):
+        if i == 0 and not show_first_model:
+            continue
+        vals = metrics_scaled[:, i].tolist()
+        vals += vals[:1]
+        ax.plot(angles, vals, label=model_name, color=color, linewidth=2)
+        ax.fill(angles, vals, color=color, alpha=0.25)
+
+    ax.set_xticks(angles[:-1])
+    ax.set_xticklabels([lbl.replace(' ', '\n') for lbl in labels])
+    ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.1), title="Models")
+
+    plt.title(f"Spider Plot - Params: {param_values_str}", y=1.08)
+    fig.tight_layout()
+    plt.savefig(f"{save_folder}/SpiderPlot{param_values_str}.png", dpi=300)
+    plt.show()
+
+######################## INTERACTIVE LOOP ########################
+while True:
+    print("\nEnter desired values for each parameter (or 'q' to quit at any time).")
+    
+    # 1) Array Size
+    user_in = input(f"array_size options={array_size}: ")
+    if user_in.lower() == 'q': 
+        break
+    try:
+        array_size_val = float(user_in)
+    except ValueError:
+        print("Invalid input. Please try again.")
         continue
-    vals = metrics_scaled[:, i].tolist()
-    vals += vals[:1]
-    ax.plot(angles, vals, label=model_name, color=color, linewidth=2)
-    ax.fill(angles, vals, color=color, alpha=0.25)
+    
+    # 2) Parasitic Resistance
+    user_in = input(f"parasiticResistance options~[{parasiticResistance[0]}..{parasiticResistance[-1]}]: ")
+    if user_in.lower() == 'q':
+        break
+    try:
+        parasiticResistance_val = float(user_in)
+    except ValueError:
+        print("Invalid input. Please try again.")
+        continue
 
-ax.set_xticks(angles[:-1])
-ax.set_xticklabels([lbl.replace(' ', '\n') for lbl in labels])
-ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.1), title="Models")
-plt.tight_layout()
-plt.savefig(folder + '/Figure_Spider_plot.png')
-plt.show()
+    # 3) Memory Window
+    user_in = input(f"memoryWindow options={memoryWindow}: ")
+    if user_in.lower() == 'q':
+        break
+    try:
+        memoryWindow_val = float(user_in)
+    except ValueError:
+        print("Invalid input. Please try again.")
+        continue
+
+    # 4) Variability Index
+    user_in = input(f"variability index from 0 to {variabilitySize-1}: ")
+    if user_in.lower() == 'q':
+        break
+    try:
+        variability_val = float(user_in)
+    except ValueError:
+        print("Invalid input. Please try again.")
+        continue
+
+    # 5) Hrs Percentage
+    user_in = input(f"Hrs Percentage options={Rhrs_percentage}: ")
+    if user_in.lower() == 'q':
+        break
+    try:
+        Rhrs_percentage_val = float(user_in)
+    except ValueError:
+        print("Invalid input. Please try again.")
+        continue
+
+    # Find nearest indices
+    d0 = find_nearest_index(array_size,          array_size_val)
+    d1 = find_nearest_index(parasiticResistance, parasiticResistance_val)
+    d2 = find_nearest_index(memoryWindow,        memoryWindow_val)
+    d3 = find_nearest_index(range(variabilitySize), variability_val)
+    d4 = find_nearest_index(Rhrs_percentage,     Rhrs_percentage_val)
+
+    # Now compute base_metrics and (optionally) robustness_metrics for the 1D slices
+
+    # Example: Single-slice "Current Accuracy" for each model
+    # (We use the reciprocal of the Metric for demonstration; adapt to your usage)
+    # sub_metric: shape (modelSize,)
+    sub_metric = Metric[d0, d1, d2, d3, d4, :]  # a single slice across models
+
+    # In this example, let's define:
+    # base_metric ~ (1 / sub_metric), just as a placeholder
+    base_metrics = {
+        'Current Accuracy': 1 / (sub_metric + 1e-12),  # add small epsilon to avoid /0
+    }
+
+    # Let's also compute a "robustness" measure across one dimension at a time
+    # We'll do a 1D slice approach: for each dimension, fix everything except that dimension
+    # In reality, you'd tailor it to your own definition of "robustness".
+    arr_slice        = Metric[:,   d1, d2, d3, d4, :]  # vary array_size only
+    parasite_slice   = Metric[d0,  :,  d2, d3, d4, :]  # vary parasiticResistance only
+    memwin_slice     = Metric[d0,  d1, :,  d3, d4, :]  # vary memoryWindow only
+    variab_slice     = Metric[d0,  d1, d2, :,  d4, :]  # vary variability only
+    sparsity_slice   = Metric[d0,  d1, d2, d3,  :,  :] # vary Rhrs_percentage only
+
+    # Each slice is shape (N, modelSize), so we can compute std across axis=0 or axis=1
+    # We'll do standard deviation across the varying dimension, then take reciprocal
+    array_size_robustness        = np.reciprocal(np.std(arr_slice,      axis=0) + 1e-12)
+    parasitic_res_robustness     = np.reciprocal(np.std(parasite_slice, axis=0) + 1e-12)
+    memory_win_robustness        = np.reciprocal(np.std(memwin_slice,   axis=0) + 1e-12)
+    variability_robustness       = np.reciprocal(np.std(variab_slice,   axis=0) + 1e-12)
+    sparsity_robustness          = np.reciprocal(np.std(sparsity_slice, axis=0) + 1e-12)
+
+    robustness_metrics = {
+        'Array Size Robustness': array_size_robustness,
+        'Parasitic Resistance Robustness': parasitic_res_robustness,
+        'Memory Window Robustness': memory_win_robustness,
+        'Variability Robustness': variability_robustness,
+        'Sparsity Robustness': sparsity_robustness
+    }
+
+    # Prepare string with parameter values for saving & labeling
+    param_values_str = (
+        f"_as{array_size[d0]}_pr{parasiticResistance[d1]:.2f}"
+        f"_mw{memoryWindow[d2]}_var{d3}_rsp{Rhrs_percentage[d4]}"
+    )
+
+    # Plot the new spider chart
+    plot_spider_chart(base_metrics, robustness_metrics, param_values_str)
+    
+    print("Figure saved. Close the plot window to continue or press Ctrl+C to abort.")
+
+
 
 ###################### 3) Error vs Different Data #####################
 data_types = ['array_size', 'parasiticResistance', 'memoryWindow', 'variability', 'sparsity']

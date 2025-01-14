@@ -46,9 +46,9 @@ Models = [
     DMRModel_new("DMR_torch"),
     GammaModel("Gamma_torch"),
     GammaModel_acc("Gamma_acc_v1"),
-    GammaModel_acc_v2("Gamma"),
-    alpha_beta("alpha_beta"),
-    alpha_beta_acc("alpha_beta_acc"),
+    GammaModel_acc_v2("γ"),
+    alpha_beta("alpha_beta_old"),
+    alpha_beta_acc("alpha-beta"),
     CrossSimModel("CrossSim_ref"),
     CrossSimModel("CrossSim1",Verr_th=0.5),
     CrossSimModel("CrossSim2",Verr_th=1e-1),
@@ -75,7 +75,7 @@ new_model_functions = {
     "Jeong_torch": jeong_model,
     "CrossSim_torch" : crosssim_model
 }
-enabled_models = [ "Ideal","Jeong","DMR","Gamma", "alpha_beta_acc", "DMR_acc"]
+enabled_models = [ "Ideal","Jeong","DMR","γ", "alpha-beta"]
 # enabled_models = [ "Ideal","Jeong","DMR","Gamma","CrossSim1","CrossSim2", "CrossSim3", "CrossSim4", "CrossSim5", "CrossSim6", "CrossSim7", "CrossSim8", "Memtorch", "NgSpice"]
 # enabled_models = [model.name for model in Models]
 
@@ -276,7 +276,8 @@ if "Ideal" in enabled_models:
 color_mapping = {
     "Jeong": "c",
     "DMR": "g",
-    "Gamma": "r",
+    "γ": "darkred",
+    "alpha-beta": "r",
     "Ng": "pink",
     "CrossSim": "b",
     "Ideal": "black",
