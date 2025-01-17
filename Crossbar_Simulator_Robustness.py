@@ -29,7 +29,7 @@ Models = [
     GammaModel_acc("Gamma_acc_v1"),
     GammaModel_acc_v2("γ"),
     alpha_beta("alpha_beta_old"),
-    alpha_beta_acc("alpha-beta"),
+    alpha_beta_acc("αβ-matrix"),
     CrossSimModel("CrossSim_ref"),
     CrossSimModel("CrossSim", Verr_th=0.3, hide_convergence_msg=True),
     CrossSimModel("CrossSim2", Verr_th=1e-1),
@@ -44,7 +44,7 @@ Models = [
 ]
 
 # Enabled models
-enabled_models = ["Ideal", "Jeong_avg", "DMR", "alpha-beta"]
+enabled_models = ["Ideal", "Jeong_avg", "DMR", "αβ-matrix"]
 reference_model = "CrossSim7"
 enabled_models.append(reference_model)
 
@@ -57,13 +57,13 @@ robustness_flag = True  # Enable/disable 1D-slice robustness computation
 # Crossbar dimensions sweep
 array_size = np.arange(32, 128, 16)
 # Sparsity of the matrix
-Rhrs_percentage = np.arange(10, 100, 20)
+Rhrs_percentage = np.arange(10, 100, 10)
 # Parasitic resistance
-parasiticResistance = np.arange(0.1, 5, 1)
+parasiticResistance = np.arange(0.1, 5, 0.5)
 # Memory window (ratio Hrs/Lrs)
-memoryWindow = np.arange(20, 100, 20)
+memoryWindow = np.arange(20, 100, 10)
 # Number of different variability instances
-variabilitySize = 5
+variabilitySize = 10
 
 # Low resistance programming value
 R_lrs = 1000
@@ -185,13 +185,14 @@ else:
 color_mapping = {
     "Jeong": "c",
     "DMR": "g",
-    "γ": "r",
-    "alpha-beta": "darkred",
+    "γ": "darkred",
+    "αβ-matrix": "r",
     "Ng": "pink",
     "CrossSim": "b",
     "Ideal": "black",
     "Memtorch": "orange"
 }
+
 colors = [
     color_mapping[next((key for key in color_mapping if model.startswith(key)), None)]
     if any(model.startswith(key) for key in color_mapping)
@@ -449,3 +450,6 @@ for i, (data_type, data_vals, label, err_lbl) in enumerate(zip(data_types, data_
         fig.tight_layout()
         plt.savefig(f"{folder}/Figure_error_vs_{data_type}.png", dpi=300)
         plt.show()
+
+
+

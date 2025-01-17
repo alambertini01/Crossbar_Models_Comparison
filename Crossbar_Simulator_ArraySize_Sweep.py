@@ -18,7 +18,16 @@ from CrossbarModels.Crossbar_Models import *
 # Models initialization
 Models = [
     JeongModel("Jeong"),
-    JeongModel_avg("Jeong_avg"),
+    JeongModel_avg("jeong_avg"),
+    JeongModel_avg("jeong_avg1",k=0.1),
+    JeongModel_avg("jeong_avg2",k=0.2),
+    JeongModel_avg("jeong_avg3",k=0.3),
+    JeongModel_avg("jeong_avg4",k=0.4),
+    JeongModel_avg("jeong_avg5",k=0.5),
+    JeongModel_avg("jeong_avg6",k=0.6),
+    JeongModel_avg("jeong_avg7",k=0.76),
+    JeongModel_avg("jeong_avg8",k=0.8),
+    JeongModel_avg("jeong_avg9",k=0.9),
     JeongModel_avgv2("Jeong_torch"),
     IdealModel("Ideal"),
     DMRModel("DMR_old"),
@@ -29,13 +38,14 @@ Models = [
     GammaModel_acc("Gamma_acc_v1"),
     GammaModel_acc_v2("γ"),
     alpha_beta("alpha_beta_old"),
-    alpha_beta_acc("alpha-beta"),
+    alpha_beta_acc("αβ-matrix"),
     CrossSimModel("CrossSim_ref"),
     CrossSimModel("CrossSim", Verr_th=0.3, hide_convergence_msg=True),
     CrossSimModel("CrossSim2", Verr_th=1e-1),
     CrossSimModel("CrossSim3", Verr_th=1e-2),
     CrossSimModel("CrossSim4", Verr_th=1e-3),
     CrossSimModel("CrossSim7", Verr_th=1e-7),
+    CrossSimModel("CrossSim8", Verr_th=1e-8),
     LTSpiceModel("LTSpice"),
     NgSpiceModel("NgSpice"),
     NgSpiceNonLinearModel("NgSpiceNonLinear"),
@@ -44,8 +54,8 @@ Models = [
 ]
 
 # Enabled models
-enabled_models = ["Ideal", "Jeong_avg", "DMR", "γ", "alpha-beta"]
-reference_model = "CrossSim7"
+enabled_models = ["Ideal", "Jeong", "DMR", "αβ-matrix"]
+reference_model = "CrossSim8"
 enabled_models.append(reference_model)
 
 modelSize = len(enabled_models)
@@ -53,15 +63,15 @@ show_first_model = False
 current_Metric = 1
 
 # Crossbar dimensions sweep
-array_size = np.arange(32, 64, 16)
+array_size = np.arange(10, 100, 10)
 # Sparsity of the matrix
-Rhrs_percentage = np.arange(10, 100, 10)
+Rhrs_percentage = np.arange(10, 100, 20)
 # Parasitic resistance
 parasiticResistance = np.arange(0.1, 5, 0.5)
 # Memory window (ratio Hrs/Lrs)
-memoryWindow = np.arange(20, 20.1, 20)
+memoryWindow = np.arange(20, 100, 20)
 # Number of different variability instances
-variabilitySize = 100
+variabilitySize = 5
 
 # Low resistance programming value
 R_lrs = 1000
@@ -184,7 +194,7 @@ color_mapping = {
     "Jeong": "c",
     "DMR": "g",
     "γ": "r",
-    "alpha-beta": "darkred",
+    "αβ-matrix": "darkred",
     "Ng": "pink",
     "CrossSim": "b",
     "Ideal": "black",

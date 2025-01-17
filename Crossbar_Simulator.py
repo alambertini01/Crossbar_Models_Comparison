@@ -32,23 +32,34 @@ from CrossbarModels.Crossbar_Models_pytorch import gamma_model, dmr_model, jeong
 ############################ PARAMETERS ##############################
 
 # Dimensions of the crossbar
-input,output = (32,32)
+input,output = (128,128)
 
 # Initialize each model instance
 Models = [
     JeongModel("Jeong"),
-    JeongModel_avg("Jeong_avg"),
+    JeongModel_avg("jeong_avg"),
+    JeongModel_avg("jeong_avg1",k=0.1),
+    JeongModel_avg("Jeong_avg2",k=0.2),
+    JeongModel_avg("Jeong_avg3",k=0.3),
+    JeongModel_avg("Jeong_avg4",k=0.4),
+    JeongModel_avg("Jeong_avg5",k=0.5),
+    JeongModel_avg("Jeong_avg6",k=0.6),
+    JeongModel_avg("Jeong_avg7",k=0.76),
+    JeongModel_avg("Jeong_avg8",k=0.8),
+    JeongModel_avg("Jeong_avg9",k=0.9),
+    JeongModel_avg("jeong_avg92",k=0.92),
     JeongModel_avgv2("Jeong_torch"),
     IdealModel("Ideal"),
     DMRModel("DMR_old"),
     DMRModel_acc("DMR_acc"),
     DMRModel_new("DMR"),
+    DMRModelv2("DMR_v2"),
     DMRModel_new("DMR_torch"),
     GammaModel("Gamma_torch"),
     GammaModel_acc("Gamma_acc_v1"),
     GammaModel_acc_v2("γ"),
     alpha_beta("alpha_beta_old"),
-    alpha_beta_acc("alpha-beta"),
+    alpha_beta_acc("αβ-matrix"),
     CrossSimModel("CrossSim_ref"),
     CrossSimModel("CrossSim1",Verr_th=0.5),
     CrossSimModel("CrossSim2",Verr_th=1e-1),
@@ -75,23 +86,24 @@ new_model_functions = {
     "Jeong_torch": jeong_model,
     "CrossSim_torch" : crosssim_model
 }
-enabled_models = [ "Ideal","Jeong","DMR","γ", "alpha-beta"]
+enabled_models = [ "Ideal","Jeong", "αβ-matrix"]
+# enabled_models = [ "Ideal","Jeong","Jeong_avg","Jeong_avg6","Jeong_avg7","Jeong_avg8","Jeong_avg9"]
 # enabled_models = [ "Ideal","Jeong","DMR","Gamma","CrossSim1","CrossSim2", "CrossSim3", "CrossSim4", "CrossSim5", "CrossSim6", "CrossSim7", "CrossSim8", "Memtorch", "NgSpice"]
 # enabled_models = [model.name for model in Models]
 
 reference_model =  "CrossSim9"
-reference_model =  "CrossSim8"
+reference_model =  "CrossSim4"
 
 # Low resistance proggramming value
 R_lrs = 1000
 Rhrs_percentage=50
 # parasitic resistance value
-parasiticResistance = np.arange(0.2, 5, 0.2)
-parasiticResistance = np.array([2])
+parasiticResistance = np.arange(0.1, 5.1, 0.1)
+parasiticResistance = np.array([4])
 
 # Memory window (ratio between Hrs and Lrs)
-memoryWindow = np.arange(5, 101, 5)
-memoryWindow = np.array([40])
+memoryWindow = np.arange(5, 101, 2)
+memoryWindow = np.array([20])
 
 # Input voltages parameters
 v_On_percentage = 100
@@ -102,7 +114,7 @@ Metric_type = 1
 
 # Variability parameters
 v_flag = 0
-v_size = 100
+v_size = 40
 
 
 ############################ INITIALIZATIONS ############################
@@ -277,7 +289,7 @@ color_mapping = {
     "Jeong": "c",
     "DMR": "g",
     "γ": "darkred",
-    "alpha-beta": "r",
+    "αβ-matrix": "r",
     "Ng": "pink",
     "CrossSim": "b",
     "Ideal": "black",
@@ -315,7 +327,7 @@ Voltage_drops_plot = 1
 Voltage_drops_error_plot = 0
 
 Metric_plot = 1
-Mean_Metric_plot = 0
+Mean_Metric_plot = 1
 Metric_vs_Rpar = 0
 Metric_vs_MW = 0
 Winning_models_map = 1
@@ -553,45 +565,6 @@ if Metric_vs_MW and parasiticSize==1:
     # Show the plot
     plt.show()
 
-if print_table:
-    model_labels = np.array(enabled_models)
-    if Metric_type == 2:
-        winning_indices = np.argmax(Metric, axis=-1)
-    else:
-        winning_indices = np.argmin(Metric, axis=-1)
-    winning_models = model_labels[winning_indices]
-    winning_df = pd.DataFrame(winning_models, index=parasiticResistance, columns=memoryWindow)
-    # First save without formatting
-    excel_path = folder_path + '/winning_models.xlsx'
-    winning_df.to_excel(excel_path, index=True)
-    # Define color mapping
-    color_map = {
-        'CrossSim': 'ADD8E6',     # light blue
-        'Gamma': 'FFB6B6',        # light red
-        'Gamma_acc': 'FFB6B6',    # light red
-        'Gamma_acc_v2': 'FFB6B6',    # light red
-        'Jeong': 'E0FFFF',        # light cyan
-        'DMR': '90EE90'  ,        # light green
-        'DMR_acc': '90EE90',       # light green
-        'DMR_acc_v2': '90EE90'       # light green
-    }
-    # Open the saved file and add formatting
-    wb = openpyxl.load_workbook(excel_path)
-    ws = wb.active
-    # Apply colors to cells (skip header row and index column)
-    for row in range(2, ws.max_row + 1):
-        for col in range(2, ws.max_column + 1):
-            cell = ws.cell(row=row, column=col)
-            model = cell.value
-            if model in color_map:
-                cell.fill = PatternFill(start_color=color_map[model],
-                                      end_color=color_map[model],
-                                      fill_type='solid')
-    # Save the formatted file
-    wb.save(excel_path)
-    os.startfile(excel_path)
-
-
 # Compute the winning model for each parasiticResistance vs. memoryWindow combination
 if Winning_models_map:
     # Fixed error scale: 0% to 30%
@@ -602,6 +575,7 @@ if Winning_models_map:
         winning_indices = np.argmax(Metric, axis=-1)
     else:
         winning_indices = np.argmin(Metric, axis=-1)
+
     non_reference_models = enabled_models[:-1]
     if Metric_type == 2:
         winning_indices_nonref = np.argmax(Metric, axis=-1)
@@ -615,6 +589,7 @@ if Winning_models_map:
     # Identify the winning models' names for each cell
     winning_models_nonref = np.array(non_reference_models)[winning_indices_nonref]
     model_color_map = {model: to_rgb(c) for model, c in zip(enabled_models, colors)}
+
     cell_colors = np.zeros((parasiticSize, memorySize, 3))
     for z in range(parasiticSize):
         for m_ in range(memorySize):
@@ -637,31 +612,44 @@ if Winning_models_map:
     ax.set_ylabel("Parasitic Resistance", fontsize=16)
     ax.set_title("Winning Models Map (Shaded by Error)", fontsize=18, pad=20)
     ax.tick_params(labelsize=14)
-    # Remove old legend since we have the model bars
     fig.subplots_adjust(bottom=0.3)
-    # Show model-specific bars again, each indicating 0% to 30% error range
-    winning_models_unique = [model for model in enabled_models if model in np.unique(winning_models_nonref)]
-    num_cbars = len(winning_models_unique)
-    bar_width = 0.8 / num_cbars
-    bar_height = 0.03
-    bar_y = 0.12  # position above bottom
-    spacing = 0.02  # Adjust this value to control the spacing
-    for i, model in enumerate(winning_models_unique):
-        base_color = np.array(model_color_map[model])
-        pastel_color = (base_color + 2.0 * np.array([1.0, 1.0, 1.0])) / 3.0
-        gradient = np.linspace(0, 1, 256)
-        grad_colors = np.outer(np.ones_like(gradient), base_color)*(1 - gradient[:, None]) + \
-                      np.outer(np.ones_like(gradient), pastel_color)*gradient[:, None]
-        cbar_ax = fig.add_axes([0.1 + i*(bar_width + spacing), bar_y, bar_width*0.8, bar_height])
-        cbar_im = cbar_ax.imshow([grad_colors], aspect='auto', interpolation='nearest')
-        cbar_ax.set_yticks([])
-        cbar_ax.set_xticks([0, 255])
-        # Show error range in percentages
-        cbar_ax.set_xticklabels(["0%", str(ERR_MAX)+"%"], fontsize=12)
-        cbar_ax.set_title(model, fontsize=14, pad=5)
-        for spine in cbar_ax.spines.values():
-            spine.set_color('black')
-        cbar_ax.tick_params(colors='black', labelsize=12)
+
+    legend = 1
+    legend_scale_fixed = True
+    
+    if legend:
+        # Show model-specific bars again, each indicating 0% to 30% error range
+        winning_models_unique = [model for model in enabled_models if model in np.unique(winning_models_nonref)]
+        num_cbars = len(winning_models_unique)
+        bar_width = 0.8 / num_cbars
+        bar_height = 0.03
+        bar_y = 0.12  # position above bottom
+        spacing = 0.02  # Adjust this value to control the spacing
+
+        # Compute the maximum error found, if we choose not to fix the scale
+        data_max = np.ceil(np.max(metric_winner)).astype(int)
+        for i, model in enumerate(winning_models_unique):
+            base_color = np.array(model_color_map[model])
+            pastel_color = (base_color + 2.0 * np.array([1.0, 1.0, 1.0])) / 3.0
+            gradient = np.linspace(0, 1, 256)
+            grad_colors = (
+                np.outer(np.ones_like(gradient), base_color)*(1 - gradient[:, None]) + 
+                np.outer(np.ones_like(gradient), pastel_color)*gradient[:, None]
+            )
+            cbar_ax = fig.add_axes([0.1 + i*(bar_width + spacing), bar_y, bar_width*0.8, bar_height])
+            cbar_im = cbar_ax.imshow([grad_colors], aspect='auto', interpolation='nearest')
+            cbar_ax.set_yticks([])
+            # Depending on the flag, fix the max scale to ERR_MAX or use the actual data max
+            if legend_scale_fixed:
+                cbar_ax.set_xticks([0, 255])
+                cbar_ax.set_xticklabels(["0%", f"{ERR_MAX}%"], fontsize=12)
+            else:
+                cbar_ax.set_xticks([0, 255])
+                cbar_ax.set_xticklabels(["0%", f"{data_max}%"], fontsize=12)
+            cbar_ax.set_title(model, fontsize=14, pad=5)
+            for spine in cbar_ax.spines.values():
+                spine.set_color('black')
+            cbar_ax.tick_params(colors='black', labelsize=12)
     plt.savefig(folder + '/Figure_Winning_Models_Map_Shaded.png', dpi=300)
     plt.show()
 
@@ -734,8 +722,8 @@ if scatter_plot:
             plt.Line2D([0], [0], color='blue', linestyle='--', label='CrossSim Regression')
         )
     # Add the legend with larger font size
-    #ax.legend(handles=legend_handles, title="Models",
-    #          bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
+    ax.legend(handles=legend_handles, title="Models",
+             bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
     # Set x-scale to log
     ax.set_xscale('log')
     # Set labels with larger font sizes

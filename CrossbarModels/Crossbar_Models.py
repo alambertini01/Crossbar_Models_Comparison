@@ -32,8 +32,6 @@ class JeongModel(CrossbarModel):
         cumsum_weights = np.cumsum(weights)
         A_jeong = parasiticResistance * cumsum_weights
 
-        # Precompute the weights: same decreasing weights as before
-        weights = np.arange(input, 0, -1, dtype=float)
         cumsum_weights = np.cumsum(weights[::-1])[::-1]
         B_jeong = parasiticResistance * cumsum_weights
 
@@ -49,36 +47,38 @@ class JeongModel(CrossbarModel):
 
 
 class JeongModel_avg(CrossbarModel):
+    def __init__(self, name, k = 0.9):
+        super().__init__(name)
+        self.k = k
+
     def calculate(self, R, parasiticResistance, Potential, R_lrs, MW,**kwargs):
         
         input, output = R.shape
         # Precompute cumulative sums using cumsum
         weights = np.arange(output, 0, -1, dtype=float)
-        cumsum_weights = np.cumsum(weights)
-        A_jeong = parasiticResistance * cumsum_weights
-
-        # Precompute the weights: same decreasing weights as before
-        weights = np.arange(input, 0, -1, dtype=float)
-        cumsum_weights = np.cumsum(weights[::-1])[::-1]
-        B_jeong = parasiticResistance * cumsum_weights
+        A_jeong = parasiticResistance * np.cumsum(weights)
+        B_jeong = parasiticResistance * np.sum(weights[::-1])
 
         # Calculate Rd_avg (the average resistance)
-        k = 0.9
         R_hrs = R_lrs*MW
-        a = R_lrs**(-k)
-        b = R_hrs**(-k)
+        a = R_lrs**(-self.k)
+        b = R_hrs**(-self.k)
         Rd_avg = (a * R_lrs + b * R_hrs) / (a + b)
-        
-        A_jeong_matrix = np.tile(A_jeong, (input, 1))  # Repeat A_jeong across rows (input axis)
-        B_jeong_matrix = np.tile(B_jeong.reshape(-1, 1), (1, output))  # Repeat B_jeong across columns (output axis)
-        R_avg_matrix = np.full((input, output), Rd_avg)
-        V_a_matrix = np.tile(Potential.reshape(-1, 1), output)
 
-        voltage_drops_jeong = (R_avg_matrix*(np.reciprocal(A_jeong_matrix+R_avg_matrix+B_jeong_matrix))) * V_a_matrix
-        current_jeong = np.sum(voltage_drops_jeong*np.reciprocal(R_avg_matrix),axis=0)
-        
+        V_a_matrix = np.tile(Potential.reshape(-1, 1), output)
+        Va = np.mean(Potential)
+
+        voltage_drops_jeong = V_a_matrix
+
+        I_appr= input*Va*np.reciprocal(A_jeong+Rd_avg+B_jeong)
+        I_ideal_avg = input*Va/Rd_avg
+        I_ideal = Potential@np.reciprocal(R)
+
+        current_jeong = I_ideal*I_appr/I_ideal_avg
+
         return voltage_drops_jeong, current_jeong
     
+
 class JeongModel_avgv2(CrossbarModel):
     def calculate(self, R, parasiticResistance, Potential, R_lrs, MW,**kwargs):
         
@@ -146,7 +146,85 @@ class DMRModel(CrossbarModel):
 
         return voltage_drops_dmr, current_dmr
 
-    
+
+
+class DMRModelv2(CrossbarModel):
+    def calculate(self, R, parasiticResistance, Potential, **kwargs):
+
+        input, output = R.shape
+        G = np.reciprocal(R)
+        g_bit = 1/parasiticResistance
+        g_word = 1/parasiticResistance
+
+        a_dmr = [0]*input
+        b_dmr = [0]*output
+        
+        gAverageRow = G.mean(1)
+        gAverageCol = G.mean(0)
+        
+            # ------------------------------------------------------------
+        # a_i formula (1-based index for i=1..m):
+        #
+        #   a_i ≈
+        #        1 + ∑(k=1..i)[ (i - k) * G_k / g_bit ]
+        #       --------------------------------------
+        #        1 + ∑(k=1..m)[ (m+1 - k) * G_k / g_bit ]
+        #
+        # where m = input_size and G_k = gAverageRow[k-1] in Python.
+        # ------------------------------------------------------------
+
+        # Precompute the denominator that is shared across all i
+        denom_a = 1.0 + sum(
+            ( (input + 1) - k ) * gAverageRow[k-1] / g_bit
+            for k in range(1, input+1)
+        )
+
+        # Compute a_i for i in [1..input_size]
+        for i in range(1, input+1):
+            numerator = 1.0 + sum(
+                ( (i - k) * gAverageRow[k-1] / g_bit )
+                for k in range(1, i+1)
+            )
+            a_dmr[i-1] = numerator / denom_a
+
+        # ------------------------------------------------------------
+        # b_j formula (1-based index for j=1..n):
+        #
+        #   b_j ≈
+        #        1 + ∑(k=j..n)[ (k - j) * G_k / g_word ]
+        #       ---------------------------------------
+        #        1 + ∑(k=1..n)[ k * G_k / g_word ]
+        #
+        # where n = output_size and G_k = gAverageCol[k-1] in Python.
+        # ------------------------------------------------------------
+
+        # Precompute the denominator that is shared across all j
+        denom_b = 1.0 + sum(
+            (k * gAverageCol[k-1] / g_word)
+            for k in range(1, output+1)
+        )
+
+        # Compute b_j for j in [1..output_size]
+        for j in range(1, output+1):
+            numerator = 1.0 + sum(
+                ( (k - j) * gAverageCol[k-1] / g_word )
+                for k in range(j, output+1)
+            )
+            b_dmr[j-1] = numerator / denom_b
+        
+        # Creation of the diag matrices A and B with the vector a and b
+        A_dmr = np.diag(a_dmr)
+        B_dmr = np.diag(b_dmr)
+        W_dmr = A_dmr.dot(G).dot(B_dmr)
+
+        V_a_matrix = np.tile(Potential.reshape(-1, 1), output)
+
+        current_dmr = Potential.dot(W_dmr)
+        voltage_drops_dmr = A_dmr @ V_a_matrix @ B_dmr
+
+        return voltage_drops_dmr, current_dmr
+
+
 class DMRModel_acc(CrossbarModel):
     def calculate(self, R, parasiticResistance, Potential, **kwargs):
 
@@ -193,58 +271,49 @@ class DMRModel_acc(CrossbarModel):
 
 class DMRModel_new(CrossbarModel):
     def calculate(self, R, parasiticResistance, Potential, **kwargs):
-        m, n = R.shape
-        G = 1.0 / R
+        # Shape of R:
+        input_, output_ = R.shape
+        
+        # Conductances
+        G = 1.0 / R  # np.reciprocal(R) is fine, but 1.0/R is usually faster
+        
+        # Parasitic conductances
         g_bit = 1.0 / parasiticResistance
-        g_word = 1.0 / parasiticResistance
+        g_word = g_bit  # same in the original code
+        
+        # Row and column means
+        gAvRow = G.mean(axis=1)  # shape: (input_,)
+        gAvCol = G.mean(axis=0)  # shape: (output_,)
+        
+        S1 = np.insert(np.cumsum(gAvRow), 0, 0.0)               # length: input_+1
+        S2 = np.insert(np.cumsum(np.arange(input_)*gAvRow), 0, 0.0)  # length: input_+1
+        
+        # Summation_bit = sum_{k=0..input_-1} ((input_-k)*gAvRow[k])
+        Summation_bit = input_ * S1[input_] - S2[input_]
+        
+        jArr = np.arange(input_)
+        Summation1 = jArr * S1[jArr] - S2[jArr]  # vector of length input_
 
-        # Row-average and column-average conductances
-        gAvgRow = G.mean(axis=1)   # shape (m,)
-        gAvgCol = G.mean(axis=0)   # shape (n,)
+        a_dmr = (1.0 + Summation1 / g_bit) / (1.0 + Summation_bit / g_bit)
 
-        #================= a_dmr =================
-        # Prefix sums, each of length (m+1) so cRowPad[i] = sum of gAvgRow[:i]
-        cRowPad  = np.concatenate(([0], np.cumsum(gAvgRow)))
-        ckRowPad = np.concatenate(([0], np.cumsum(np.arange(m) * gAvgRow)))
-        # Denominator: sum_{k=0}^{m-1}(m-k)*gAvgRow[k] 
-        # => m*sum(gAvgRow) - sum(k*gAvgRow[k])
-        denom_a = m * cRowPad[m] - ckRowPad[m]
-        # For each i in [0..m-1], numerator = i*sum_{k=0}^{i-1}(gAvgRow[k]) - sum_{k=0}^{i-1}(k*gAvgRow[k])
-        iRow = np.arange(m)
-        num_a = iRow * cRowPad[iRow] - ckRowPad[iRow]
-        a_dmr = (1.0 + num_a/g_bit) / (1.0 + denom_a/g_bit)  # shape (m,)
+        T1 = np.insert(np.cumsum(gAvCol), 0, 0.0)                 # length: output_+1
+        T2 = np.insert(np.cumsum(np.arange(output_)*gAvCol), 0, 0.0)   # length: output_+1
 
-        #================= b_dmr =================
-        kCol = np.arange(n)
-        # Summation_word = sum_{k=0}^{n-1} (k+1)*gAvgCol[k]
-        sum_word = np.sum((kCol + 1) * gAvgCol)
+        Summation_word = T2[output_] + T1[output_]
 
-        # Prefix sums along columns, each of length (n+1)
-        cColPad  = np.concatenate(([0], np.cumsum(gAvgCol)))         # cColPad[k] = sum(gAvgCol[:k])
-        ckColPad = np.concatenate(([0], np.cumsum(kCol*gAvgCol)))    # ckColPad[k] = sum_{p=0..k-1}(p*gAvgCol[p])
+        jArr2 = np.arange(output_)
+        Summation2 = (T2[output_] - T2[jArr2]) - jArr2*(T1[output_] - T1[jArr2])
 
-        # part1 = sum_{k=j}^{n-1}(k*gAvgCol[k]) => ckColPad[n] - ckColPad[j]
-        # part2 = j * sum_{k=j}^{n-1}(gAvgCol[k]) => j*(cColPad[n] - cColPad[j])
-        # We want arrays of length n, so slice [ :n ]
-        part1 = ckColPad[n] - ckColPad[:n]
-        part2 = (cColPad[n] - cColPad[:n]) * kCol
-        num_b = part1 - part2
-        b_dmr = (1.0 + num_b/g_word) / (1.0 + sum_word/g_word)  # shape (n,)
+        # b_dmr[j] = (1 + Summation2_j / g_word) / (1 + Summation_word / g_word)
+        b_dmr = (1.0 + Summation2 / g_word) / (1.0 + Summation_word / g_word)
 
-        # Diagonal matrices
-        A_dmr = np.diag(a_dmr)
-        B_dmr = np.diag(b_dmr)
+        W_dmr = (a_dmr[:, None] * G) * b_dmr
+        
+        # current_dmr = Potential @ W_dmr
+        current_dmr = Potential @ W_dmr  # shape: (output_,)
 
-        # Final effective matrix
-        W_dmr = A_dmr @ G @ B_dmr
-
-        # Voltage broadcast
-        Va_mat = Potential.reshape(-1, 1)  # shape (m,1)
-        Va_mat = np.broadcast_to(Va_mat, (m, n))
-
-        # Outputs
-        current_dmr = Potential @ W_dmr   # shape (n,)
-        voltage_drops_dmr = A_dmr @ Va_mat @ B_dmr  # shape (m,n)
+        Potential2d = Potential[:, None]  # shape: (input_, 1)
+        voltage_drops_dmr = (a_dmr[:, None] * Potential2d) * b_dmr  # shape: (input_, output_)
 
         return voltage_drops_dmr, current_dmr
 
@@ -310,7 +379,7 @@ class GammaModel(CrossbarModel):
                 num_beta = I[i, output-1] * g_word * gamma + sum((k - 1) * I[i, j + k - 1] for k in range(1, output - j + 1)) * G[i, output-1]
                 denom_beta = I[i, output-1] * g_word * gamma + sum(k * I[i, k - 1] for k in range(1, output + 1)) * G[i, output-1] * gamma_b
                 beta_gm[i, j] = num_beta / denom_beta
-                
+
         V_a_matrix = np.tile(Potential.reshape(-1, 1), output)
         voltage_drops_gamma = alpha_gm * V_a_matrix * beta_gm
         current_gamma = Potential @ (alpha_gm * G * beta_gm)
@@ -357,8 +426,9 @@ class GammaModel_acc_v2(CrossbarModel):
     def calculate(self, R, parasiticResistance, Potential, **kwargs):
 
         input, output = R.shape
+        V_a_matrix = np.tile(Potential.reshape(-1, 1), output)
         G = np.reciprocal(R)
-        I = G * np.max(Potential)
+        I = G * V_a_matrix
         # Initialize alpha and beta matrices
         alpha_gm = np.zeros((input, output))
         beta_gm = np.zeros((input, output))
@@ -419,7 +489,7 @@ class GammaModel_acc_v2(CrossbarModel):
         beta_denominator = I[:, output -1] * g_word * gamma + I_betaacc2[:, 0] * G[:, output -1] * gamma_b
         beta_gm = beta_numerator / beta_denominator
 
-        V_a_matrix = np.tile(Potential.reshape(-1, 1), output)
+    
         voltage_drops_gamma = alpha_gm * V_a_matrix * beta_gm.T
         current_gamma = Potential @ (alpha_gm * G * beta_gm.T)
 
@@ -528,9 +598,8 @@ class CrossSimModel(CrossbarModel):
 class IdealModel(CrossbarModel):
     def calculate(self, R, parasiticResistance, Potential, **kwargs):
 
-        input, output = R.shape
-        voltage_ideal = np.tile(Potential.reshape(-1, 1), output)
-        current_ideal = np.sum(voltage_ideal*np.reciprocal(R),axis=0)
+        voltage_ideal = np.tile(Potential.reshape(-1, 1), R.shape[1])
+        current_ideal = Potential@np.reciprocal(R)
         return voltage_ideal, current_ideal
 
 
