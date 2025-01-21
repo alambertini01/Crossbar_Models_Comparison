@@ -45,10 +45,10 @@ print(f"Using device: {device}")
 hiddenLayer = 128
 batch_size = 128
 learning_rate = 0.002
-epochs = 20
+epochs = 10
 save_checkpoint = False
-Fix_positive_weights = True
-early_stop_acc = 99.8
+Fix_positive_weights = False
+early_stop_acc = 99
 
 # Data loading and preprocessing - using normalization for stability
 transform = transforms.Compose([
