@@ -38,56 +38,85 @@ def jeong_model(weight, x, parasiticResistance):
     return current_jeong
 
 
-# DMR model implementation
-# Calculates voltage drops and currents using diagonal matrices A and B
-def dmr_model(weight, x, parasiticResistance):
+def dmr_model(weight: torch.Tensor, x: torch.Tensor, parasiticResistance: float):
+    """
+    PyTorch adaptation of DMRModel_new for batched inputs.
+    Computes only the current (no voltage-drop output).
+    
+    Parameters
+    ----------
+    weight : torch.Tensor
+        Conductance matrix (G) of shape (input_size, output_size).
+    x : torch.Tensor
+        Batched input voltages of shape (batch_size, input_size).
+    parasiticResistance : float
+        Parasitic resistance used to compute g_bit and g_word.
+
+    Returns
+    -------
+    current_dmr : torch.Tensor
+        Output currents of shape (batch_size, output_size).
+    """
+    device = weight.device
+    dtype = weight.dtype
     input_size, output_size = weight.shape
-    G = weight  # Conductance matrix
 
-    # Calculate g_bit and g_word values
-    g_bit = g_word = 1 / parasiticResistance
+    # Parasitic conductances
+    g_bit = 1.0 / parasiticResistance
+    g_word = g_bit  # same in the original code
 
-    # Compute average conductances per row and column
-    gAverageRow = G.mean(dim=1)  # Shape: (input_size,)
-    gAverageCol = G.mean(dim=0)  # Shape: (output_size,)
+    # G is already the conductance matrix
+    G = weight
 
-    # Calculate a_dmr values
-    indices_row = torch.arange(input_size, device=weight.device, dtype=weight.dtype)
-    indices_row_rev = torch.arange(input_size, 0, -1, device=weight.device, dtype=weight.dtype)
-    Summation_bit = torch.sum(indices_row_rev * gAverageRow)
-    Summation1 = indices_row * torch.cumsum(gAverageRow, dim=0) - torch.cumsum(indices_row * gAverageRow, dim=0)
-    a_dmr = (1 + Summation1 / g_bit) / (1 + Summation_bit / g_bit)  # Shape: (input_size,)
+    # Row & column averages
+    gAvRow = G.mean(dim=1)  # shape: (input_size,)
+    gAvCol = G.mean(dim=0)  # shape: (output_size,)
 
-    # Calculate b_dmr values
-    indices_col = torch.arange(output_size, device=weight.device, dtype=weight.dtype)
-    indices_col_1 = torch.arange(1, output_size + 1, device=weight.device, dtype=weight.dtype)
-    Summation_word = torch.sum(indices_col_1 * gAverageCol)
-    difference_matrix = (indices_col.view(1, -1) - indices_col.view(-1, 1)).clamp(min=0)
-    Summation2 = torch.matmul(
-        torch.triu(difference_matrix),
-        gAverageCol
-    )
-    b_dmr = (1 + Summation2 / g_word) / (1 + Summation_word / g_word)  # Shape: (output_size,)
+    # ---------------------------------------------------------------
+    # a_dmr calculation (row-based)
+    # ---------------------------------------------------------------
+    # We need cumulative sums S1, S2 of length (input_size+1)
+    # S1[i] = sum(gAvRow[:i]), S2[i] = sum((k*gAvRow[k]) for k=0..i-1)
+    cumsum_gAvRow = torch.cumsum(gAvRow, dim=0)
+    S1 = torch.cat([torch.zeros(1, device=device, dtype=dtype), cumsum_gAvRow])  # shape: (input_size+1,)
 
-    # Create diagonal matrices A and B
-    A_dmr = torch.diag(a_dmr)  # Shape: (input_size, input_size)
-    B_dmr = torch.diag(b_dmr)  # Shape: (output_size, output_size)
+    # j_tensor for indexing must be long
+    j_tensor_long = torch.arange(input_size, device=device, dtype=torch.long)
+    # We'll also need j_tensor as float for arithmetic
+    j_tensor_float = j_tensor_long.to(dtype=dtype)
 
-    # Calculate W_dmr
-    W_dmr = A_dmr @ G @ B_dmr  # Shape: (input_size, output_size)
+    cumsum_j_gAvRow = torch.cumsum(j_tensor_float * gAvRow, dim=0)  # shape: (input_size,)
+    S2 = torch.cat([torch.zeros(1, device=device, dtype=dtype), cumsum_j_gAvRow])  # shape: (input_size+1,)
 
-    # Compute currents
-    current_dmr = x @ W_dmr  # Shape: (batch_size, output_size)
+    Summation_bit = input_size * S1[input_size] - S2[input_size]
+    Summation1 = j_tensor_float * S1[j_tensor_long] - S2[j_tensor_long]
+    a_dmr = (1.0 + Summation1 / g_bit) / (1.0 + Summation_bit / g_bit)  # shape: (input_size,)
 
-    # Calculate voltage drops (not used in output)
-    # voltage_drops_dmr represents the voltage drops across the array considering parasitic resistances
-    # V_a_matrix = x  # Shape: (batch_size, input_size)
-    # voltage_drops_dmr = V_a_matrix @ A_dmr @ G @ B_dmr  # Shape: (batch_size, output_size)
+    # ---------------------------------------------------------------
+    # b_dmr calculation (column-based)
+    # ---------------------------------------------------------------
+    # T1[i] = sum(gAvCol[:i]), T2[i] = sum((k*gAvCol[k]) for k=0..i-1)
+    cumsum_gAvCol = torch.cumsum(gAvCol, dim=0)
+    T1 = torch.cat([torch.zeros(1, device=device, dtype=dtype), cumsum_gAvCol])  # shape: (output_size+1,)
+
+    j_tensor2_long = torch.arange(output_size, device=device, dtype=torch.long)
+    j_tensor2_float = j_tensor2_long.to(dtype=dtype)
+
+    cumsum_j_gAvCol = torch.cumsum(j_tensor2_float * gAvCol, dim=0)
+    T2 = torch.cat([torch.zeros(1, device=device, dtype=dtype), cumsum_j_gAvCol])  # shape: (output_size+1,)
+
+    Summation_word = T2[output_size] + T1[output_size]
+    Summation2 = (T2[output_size] - T2[j_tensor2_long]) \
+                 - j_tensor2_float * (T1[output_size] - T1[j_tensor2_long])
+    b_dmr = (1.0 + Summation2 / g_word) / (1.0 + Summation_word / g_word)  # shape: (output_size,)
+
+    # ---------------------------------------------------------------
+    # Construct W_dmr and compute currents for the batch
+    # ---------------------------------------------------------------
+    W_dmr = (a_dmr.unsqueeze(1) * G) * b_dmr.unsqueeze(0)  # shape: (input_size, output_size)
+    current_dmr = x @ W_dmr  # shape: (batch_size, output_size)
 
     return current_dmr
-
-
-
 
 
 
@@ -186,6 +215,134 @@ def gamma_model(weight, x, parasiticResistance):
     
     # Compute the current using broadcasting
     current_gamma = torch.sum(voltage_drops_gamma * G.unsqueeze(0).repeat(batch_size, 1, 1), dim=1)  # Shape: (batch_size, output_size)
+    return current_gamma
+
+
+
+def alpha_beta_model(weight, x, parasiticResistance):
+    """
+    PyTorch adaptation of the alpha-beta model for batched inputs.
+
+    Parameters
+    ----------
+    weight : torch.Tensor
+        The conductance matrix of shape (input_size, output_size).
+    x : torch.Tensor
+        The batched input voltages of shape (batch_size, input_size).
+    parasiticResistance : float
+        The parasitic resistance value (used to compute parasitic conductances g_bit, g_word).
+
+    Returns
+    -------
+    current_gamma : torch.Tensor
+        Output currents of shape (batch_size, output_size).
+    """
+
+    # weight is our G matrix of shape (input_size, output_size)
+    # x is our input of shape (batch_size, input_size)
+
+    device = weight.device
+    dtype = weight.dtype
+
+    input_size, output_size = weight.shape
+
+    # Parasitic conductances
+    g_bit = 1.0 / parasiticResistance
+    g_word = 1.0 / parasiticResistance
+
+    # Equivalent of: G = 1.0 / R, but here weight is already G
+    G = weight
+
+    # To mimic the original code's "I = G * np.max(Potential)",
+    # we'll take the maximum value over the entire batch+input dimension.
+    # (This follows the original logic, which took a single max from Potential.)
+    max_input = x.max()  # scalar
+    I = G * max_input  # shape: (input_size, output_size)
+
+    # ---------------------------------------------------------------------
+    # 1) Compute the column-wise cumsums (for alpha)
+    #    cumsumI_cols and cumsumK_I_cols both have shape (input_size+1, output_size).
+    # ---------------------------------------------------------------------
+    cumsumI_cols = torch.zeros(input_size + 1, output_size, device=device, dtype=dtype)
+    cumsumK_I_cols = torch.zeros(input_size + 1, output_size, device=device, dtype=dtype)
+
+    cumsumI_cols[1:] = torch.cumsum(I, dim=0)  # cumsum down columns (axis=0)
+    # We'll create a row-index vector [0, 1, ..., input_size-1] for weighting
+    i2D = torch.arange(input_size, device=device, dtype=dtype).unsqueeze(1)  # shape: (input_size, 1)
+    cumsumK_I_cols[1:] = torch.cumsum(i2D * I, dim=0)
+
+    # denomSum = input_size * cumsumI_cols[input_size, :] - cumsumK_I_cols[input_size, :]
+    # shape: (output_size,)
+    denomSum = input_size * cumsumI_cols[input_size, :] - cumsumK_I_cols[input_size, :]
+
+    # ---------------------------------------------------------------------
+    # 2) Compute alpha_gm
+    #    Note that topAlpha is broadcast to shape (input_size, output_size),
+    #    and botAlpha is (output_size,), so final alpha_gm is (input_size, output_size).
+    # ---------------------------------------------------------------------
+    # topAlpha = I[0, :] * g_bit + G[0, :] * (i2D * cumsumI_cols[:input_size, :] - cumsumK_I_cols[:input_size, :])
+    # Because i2D has shape (input_size,1), (i2D*cumsumI_cols[:...]) is (input_size, output_size).
+    topAlpha = (
+        I[0, :] * g_bit
+        + G[0, :] * (i2D * cumsumI_cols[:input_size, :] - cumsumK_I_cols[:input_size, :])
+    )
+
+    # botAlpha = I[0, :] * g_bit + G[0, :] * denomSum  # shape: (output_size,)
+    botAlpha = (
+        I[0, :] * g_bit
+        + G[0, :] * denomSum
+    )
+
+    alpha_gm = topAlpha / botAlpha  # broadcasting -> shape: (input_size, output_size)
+
+    # ---------------------------------------------------------------------
+    # 3) Compute the row-wise cumsums (for beta)
+    #    cumsumI_rows and cumsumP_I_rows both have shape (input_size, output_size+1).
+    # ---------------------------------------------------------------------
+    cumsumI_rows = torch.zeros(input_size, output_size + 1, device=device, dtype=dtype)
+    cumsumP_I_rows = torch.zeros(input_size, output_size + 1, device=device, dtype=dtype)
+
+    cumsumI_rows[:, 1:] = torch.cumsum(I, dim=1)  # cumsum across rows (axis=1)
+    # For partialSumBeta, we weight columns by their index j
+    j_vals = torch.arange(output_size, device=device, dtype=dtype)  # shape: (output_size,)
+    cumsumP_I_rows[:, 1:] = torch.cumsum(j_vals * I, dim=1)  # broadcasting j_vals as needed
+
+    # We need the last column of I and G for the denominator
+    I_colEnd = I[:, -1]  # shape: (input_size,)
+    G_colEnd = G[:, -1]  # shape: (input_size,)
+
+    cPI_end = cumsumP_I_rows[:, -1]  # shape: (input_size,)
+    cI_end = cumsumI_rows[:, -1]     # shape: (input_size,)
+
+    # denomBeta = I_colEnd * g_word + G_colEnd * (cPI_end + cI_end)
+    # shape: (input_size,)
+    denomBeta = I_colEnd * g_word + G_colEnd * (cPI_end + cI_end)
+
+    # ---------------------------------------------------------------------
+    # 4) Compute beta_gm
+    #    partialSumBeta is shape (input_size, output_size).
+    # ---------------------------------------------------------------------
+    j2D = j_vals.unsqueeze(0)  # shape: (1, output_size)
+    # partialSumBeta = ( (cPI_end[:, None] - cumsumP_I_rows[:, :output_size])
+    #                  - j2D * (cI_end[:, None] - cumsumI_rows[:, :output_size]) )
+    partialSumBeta = (
+        (cPI_end.unsqueeze(1) - cumsumP_I_rows[:, :output_size])
+        - j2D * (cI_end.unsqueeze(1) - cumsumI_rows[:, :output_size])
+    )
+
+    # numBeta = I_colEnd[:, None] * g_word + G_colEnd[:, None] * partialSumBeta
+    # shape: (input_size, output_size)
+    numBeta = I_colEnd.unsqueeze(1) * g_word + G_colEnd.unsqueeze(1) * partialSumBeta
+
+    beta_gm = numBeta / denomBeta.unsqueeze(1)  # shape: (input_size, output_size)
+
+    # ---------------------------------------------------------------------
+    # 5) Compute final currents for each batch:
+    #    current_gamma = x @ (alpha_gm * G * beta_gm)
+    #    => shape: (batch_size, output_size)
+    # ---------------------------------------------------------------------
+    current_gamma = x @ (alpha_gm * G * beta_gm)
+
     return current_gamma
 
 

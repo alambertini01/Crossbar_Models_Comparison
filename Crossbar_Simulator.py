@@ -22,7 +22,7 @@ from CrossbarModels.Functions.NonLinear import resistance_array_to_x
 from CrossbarModels.Functions.NonLinear import calculate_resistance
 #Import the Crossbar Models
 from CrossbarModels.Crossbar_Models import *
-from CrossbarModels.Crossbar_Models_pytorch import gamma_model, dmr_model, jeong_model, crosssim_model
+from CrossbarModels.Crossbar_Models_pytorch import gamma_model, dmr_model, jeong_model, crosssim_model, alpha_beta_model
 
 
 
@@ -55,11 +55,13 @@ Models = [
     DMRModel_new("DMR"),
     DMRModelv2("DMR_v2"),
     DMRModel_new("DMR_torch"),
+    DMRModel_new("DMR_new_torch"),
     GammaModel("Gamma_torch"),
     GammaModel_acc("Gamma_acc_v1"),
     GammaModel_acc_v2("γ"),
     alpha_beta("alpha_beta_old"),
     alpha_beta_acc("αβ-matrix"),
+    alpha_beta_acc("αβ-matrix_torch"),
     CrossSimModel("CrossSim_ref"),
     CrossSimModel("CrossSim1",Verr_th=0.5),
     CrossSimModel("CrossSim2",Verr_th=1e-1),
@@ -84,9 +86,10 @@ new_model_functions = {
     "Gamma_torch": gamma_model,
     "DMR_torch": dmr_model,
     "Jeong_torch": jeong_model,
-    "CrossSim_torch" : crosssim_model
+    "CrossSim_torch" : crosssim_model,
+    "αβ-matrix_torch" : alpha_beta_model
 }
-enabled_models = [ "Ideal","Jeong", "αβ-matrix"]
+enabled_models = [ "Ideal","Jeong", "αβ-matrix","αβ-matrix_torch","DMR_torch"]
 # enabled_models = [ "Ideal","Jeong","Jeong_avg","Jeong_avg6","Jeong_avg7","Jeong_avg8","Jeong_avg9"]
 # enabled_models = [ "Ideal","Jeong","DMR","Gamma","CrossSim1","CrossSim2", "CrossSim3", "CrossSim4", "CrossSim5", "CrossSim6", "CrossSim7", "CrossSim8", "Memtorch", "NgSpice"]
 # enabled_models = [model.name for model in Models]
