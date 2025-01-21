@@ -32,7 +32,7 @@ from CrossbarModels.Crossbar_Models_pytorch import gamma_model, dmr_model, jeong
 ############################ PARAMETERS ##############################
 
 # Dimensions of the crossbar
-input,output = (32,32)
+input,output = (64,64)
 
 # Initialize each model instance
 Models = [
@@ -64,7 +64,7 @@ Models = [
     alpha_beta_acc("αβ-matrix"),
     alpha_beta_acc("αβ-matrix_torch"),
     CrossSimModel("CrossSim_ref"),
-    CrossSimModel("CrossSim1",Verr_th=0.5),
+    CrossSimModel("CrossSim1",Verr_th=0.3),
     CrossSimModel("CrossSim2",Verr_th=1e-1),
     CrossSimModel("CrossSim3",Verr_th=1e-2),
     CrossSimModel("CrossSim4",Verr_th=1e-3),
@@ -91,12 +91,11 @@ new_model_functions = {
     "αβ-matrix_torch" : alpha_beta_model
 }
 enabled_models = [ "Ideal","Jeong", "αβ-matrix","αβ-matrix_torch","DMR_torch"]
-enabled_models = [ "Ideal","Jeong","Jeong_avg","jeong_avg1", "jeong_avg2", "jeong_avg3", "jeong_avg4", "jeong_avg5","jeong_avg6", "jeong_avg76", "jeong_avg8","jeong_avg9", "jeong_avg92", "jeong_avg95"]
-# enabled_models = [ "Ideal","Jeong","DMR","Gamma","CrossSim1","CrossSim2", "CrossSim3", "CrossSim4", "CrossSim5", "CrossSim6", "CrossSim7", "CrossSim8", "Memtorch", "NgSpice"]
+#enabled_models = [ "Ideal","Jeong","Jeong_avg","jeong_avg1", "jeong_avg2", "jeong_avg3", "jeong_avg4", "jeong_avg5","jeong_avg6", "jeong_avg76", "jeong_avg8","jeong_avg9", "jeong_avg92", "jeong_avg95"]
+enabled_models = [ "Ideal","Jeong","DMR","αβ-matrix","CrossSim1","CrossSim2", "CrossSim3", "CrossSim4", "CrossSim5", "CrossSim6", "CrossSim7", "CrossSim8", "Memtorch", "NgSpice"]
 # enabled_models = [model.name for model in Models]
 
-reference_model =  "CrossSim9"
-reference_model =  "CrossSim8"
+reference_model =  "NgSpice"
 
 # Low resistance proggramming value
 R_lrs = 1000
@@ -118,7 +117,7 @@ Metric_type = 1
 
 # Variability parameters
 v_flag = 0
-v_size = 40
+v_size = 1
 
 
 ############################ INITIALIZATIONS ############################
@@ -682,7 +681,7 @@ if scatter_plot:
     model_to_color = {model: color for model, color in zip(enabled_models, colors)}
     plot_colors = [model_to_color[m] for m in plot_models]
     # Create a larger figure for better readability
-    fig, ax = plt.subplots(figsize=(5, 5)) 
+    fig, ax = plt.subplots(figsize=(7, 5)) 
     # Identify CrossSim models among the plotted models
     crosssim_indices = [i for i, model in enumerate(plot_models) if model.startswith("CrossSim")]
     # If multiple CrossSim models are present, perform a regression on them

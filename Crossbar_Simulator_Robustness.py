@@ -18,7 +18,7 @@ from CrossbarModels.Crossbar_Models import *
 # Models initialization
 Models = [
     JeongModel("Jeong"),
-    JeongModel_avg("jeong"),
+    JeongModel_avg("Jeong_avg"),
     JeongModel_avgv2("Jeong_torch"),
     IdealModel("Ideal"),
     DMRModel("DMR_old"),
@@ -44,7 +44,7 @@ Models = [
 ]
 
 # Enabled models
-enabled_models = ["Ideal", "jeong", "DMR", "αβ-matrix"]
+enabled_models = ["Ideal", "Jeong_avg", "DMR", "αβ-matrix"]
 reference_model = "CrossSim"
 enabled_models.append(reference_model)
 
@@ -53,7 +53,7 @@ show_first_model = False
 show_reference_model = False
 current_Metric = 1
 
-robustness_flag = False  # Enable/disable 1D-slice robustness computation
+robustness_flag = True  # Enable/disable 1D-slice robustness computation
 
 # Crossbar dimensions sweep
 array_size = np.arange(16, 100, 16)
