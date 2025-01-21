@@ -47,7 +47,7 @@ batch_size = 128
 learning_rate = 0.002
 epochs = 20
 save_checkpoint = False
-Fix_positive_weights = False
+Fix_positive_weights = True
 early_stop_acc = 99.8
 
 # Data loading and preprocessing - using normalization for stability

@@ -24,8 +24,8 @@ if __name__ == '__main__':
     R_lrs = 1e3
     
     parasitic_resistances = torch.arange(2.00001, 2.1, 0.1).tolist()
-    max_array_size = 64
-    model_functions = [ crosssim_model,solve_passive_model]
+    max_array_size = 784
+    model_functions = [ crosssim_model]
     bias_correction = False
     debug_plot = False
     debug_index = 0
