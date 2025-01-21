@@ -18,7 +18,7 @@ from CrossbarModels.Crossbar_Models import *
 # Models initialization
 Models = [
     JeongModel("Jeong"),
-    JeongModel_avg("Jeong_avg"),
+    JeongModel_avg("jeong"),
     JeongModel_avgv2("Jeong_torch"),
     IdealModel("Ideal"),
     DMRModel("DMR_old"),
@@ -30,11 +30,11 @@ Models = [
     GammaModel_acc_v2("γ"),
     alpha_beta("alpha_beta_old"),
     alpha_beta_acc("αβ-matrix"),
-    CrossSimModel("CrossSim_ref"),
-    CrossSimModel("CrossSim", Verr_th=0.3, hide_convergence_msg=True),
-    CrossSimModel("CrossSim2", Verr_th=1e-1),
-    CrossSimModel("CrossSim3", Verr_th=1e-2),
-    CrossSimModel("CrossSim4", Verr_th=1e-3),
+    CrossSimModel("CrossSim"),
+    CrossSimModel("CrossSim03", Verr_th=0.3, hide_convergence_msg=True),
+    CrossSimModel("CrossSim1", Verr_th=1e-1),
+    CrossSimModel("CrossSim2", Verr_th=1e-2),
+    CrossSimModel("CrossSim3", Verr_th=1e-3),
     CrossSimModel("CrossSim7", Verr_th=1e-7),
     LTSpiceModel("LTSpice"),
     NgSpiceModel("NgSpice"),
@@ -44,18 +44,19 @@ Models = [
 ]
 
 # Enabled models
-enabled_models = ["Ideal", "Jeong_avg", "DMR", "αβ-matrix"]
-reference_model = "CrossSim7"
+enabled_models = ["Ideal", "jeong", "DMR", "αβ-matrix"]
+reference_model = "CrossSim"
 enabled_models.append(reference_model)
 
 modelSize = len(enabled_models)
 show_first_model = False
+show_reference_model = False
 current_Metric = 1
 
-robustness_flag = True  # Enable/disable 1D-slice robustness computation
+robustness_flag = False  # Enable/disable 1D-slice robustness computation
 
 # Crossbar dimensions sweep
-array_size = np.arange(32, 128, 16)
+array_size = np.arange(16, 100, 16)
 # Sparsity of the matrix
 Rhrs_percentage = np.arange(10, 100, 10)
 # Parasitic resistance
@@ -70,7 +71,7 @@ R_lrs = 1000
 # Input voltages parameters
 v_On_percentage = 100
 population = [1, 0.0]
-v_flag = 0
+v_flag = 1
 
 # Initialize time measurements
 simulation_times = np.zeros((modelSize, np.size(array_size)))
@@ -243,6 +244,250 @@ plt.grid(True, which="both", linestyle='--', linewidth=0.5)
 plt.savefig(folder + '/Figure_SimulationTimes_vs_ArraySize.png')
 plt.show()
 
+###############################################################################
+#             3D PLOTTING (SOLID COLOR PER MODEL) - LEGEND ON EACH FIG        #
+###############################################################################
+# Explanation:
+#   1) We skip the first model if show_first_model=False.
+#   2) We skip the reference model if show_reference_model=False.
+#   3) We compute z_global_min/max only over the "visible models."
+#   4) Each figure plots one surface per visible model, in a single color.
+#   5) A legend is placed on EACH figure, anchored outside to the right.
+#   6) We place x,y tick labels & axis labels on the floor plane (z=z_global_min).
+
+import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.patches as mpatches
+
+
+# Decide which models are "visible"
+visible_models = list(range(len(enabled_models)))
+
+if not show_first_model and 0 in visible_models:
+    visible_models.remove(0)
+
+if (not show_reference_model) and (reference_model in enabled_models):
+    ref_idx = enabled_models.index(reference_model)
+    if ref_idx in visible_models:
+        visible_models.remove(ref_idx)
+
+if len(visible_models) == 0:
+    print("No models to plot! Check your flags/reference_model.")
+    # Optionally return or skip the rest
+    # return
+
+# Compute the global z-range for just the visible models
+visible_data = Metric[..., visible_models]
+z_global_min = visible_data.min()
+z_global_max = visible_data.max()
+
+# Build a legend (patches) for just the visible models
+legend_patches = []
+for midx in visible_models:
+    legend_patches.append(
+        mpatches.Patch(color=model_colors[midx], label=enabled_models[midx])
+    )
+
+# Helper: build an integer-based meshgrid
+def create_meshgrid_for_3d(x_len, y_len):
+    return np.meshgrid(np.arange(x_len), np.arange(y_len), indexing='ij')
+
+# Helper: place X/Y labels & ticks on the "floor" (z=z_global_min) so they don't overlap
+def place_3d_labels_and_ticks(ax, x_vals, y_vals, x_label, y_label, zfloor, offset=0.7):
+    """
+    Removes default axis ticks and places text labels in 3D at z=zfloor,
+    'near' the edges. Adjust offset & rotation as needed.
+    """
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+    # Place X ticks along the "front edge" (y=-offset)
+    for i, lbl in enumerate(x_vals):
+        ax.text(i, -offset, zfloor, lbl, ha='center', va='top', rotation=0, color='black')
+
+    # Place Y ticks along the "left edge" (x=-offset)
+    for j, lbl in enumerate(y_vals):
+        ax.text(-offset, j, zfloor, lbl, ha='right', va='center', rotation=90, color='black')
+
+    # Axis labels in the "front-left corner"
+    ax.text(
+        (len(x_vals) - 1) / 2, -2*offset, zfloor,
+        x_label, ha='center', va='top', color='black'
+    )
+    ax.text(
+        -2*offset, (len(y_vals) - 1) / 2, zfloor,
+        y_label, ha='center', va='center', rotation=90, color='black'
+    )
+
+# Dimension labels for each axis
+dim_labels_dict = {
+    'array_size': [f"{sz}x{sz}" for sz in array_size],
+    'parasiticResistance': [f"{p:.2f}" for p in parasiticResistance],
+    'memoryWindow': [f"{mw}" for mw in memoryWindow],
+    'hrsPercentage': [f"{r}%" for r in Rhrs_percentage],
+    'variability': [str(v) for v in range(variabilitySize)],
+}
+
+###############################################################################
+# FIGURE 1: Array Size vs. Parasitic Resistance
+###############################################################################
+Z_data_par = np.mean(Metric, axis=(2, 3, 4))
+# shape -> (len(array_size), len(parasiticResistance), numModels)
+
+X_par, Y_par = create_meshgrid_for_3d(len(array_size), len(parasiticResistance))
+fig1 = plt.figure(figsize=(10, 7))
+ax1 = fig1.add_subplot(111, projection='3d')
+
+# Z range
+ax1.set_zlim(z_global_min, z_global_max)
+ax1.set_zlabel("Current Error (%)")
+
+# Place custom ticks/labels on floor
+place_3d_labels_and_ticks(
+    ax1,
+    x_vals=dim_labels_dict['array_size'],
+    y_vals=dim_labels_dict['parasiticResistance'],
+    x_label="Array Size",
+    y_label="Parasitic R",
+    zfloor=z_global_min,
+    offset=0.7
+)
+
+# Plot each visible model
+for m_idx in visible_models:
+    surface_data = Z_data_par[..., m_idx]
+    ax1.plot_surface(
+        X_par, Y_par, surface_data,
+        rstride=1, cstride=1,
+        color=model_colors[m_idx],
+        linewidth=0, antialiased=False,
+        alpha=0.9
+    )
+
+# Add legend on the right
+ax1.legend(handles=legend_patches, loc='upper left', bbox_to_anchor=(1.05, 1.0))
+ax1.view_init(elev=25, azim=-60)
+fig1.tight_layout()
+plt.savefig(f"{folder}/3D_Error_ArraySize_vs_Parasitic.png", dpi=300, bbox_inches='tight')
+plt.show()
+
+###############################################################################
+# FIGURE 2: Array Size vs. Memory Window
+###############################################################################
+Z_data_mem = np.mean(Metric, axis=(1, 3, 4))
+# shape -> (len(array_size), len(memoryWindow), numModels)
+
+X_mem, Y_mem = create_meshgrid_for_3d(len(array_size), len(memoryWindow))
+fig2 = plt.figure(figsize=(10, 7))
+ax2 = fig2.add_subplot(111, projection='3d')
+
+ax2.set_zlim(z_global_min, z_global_max)
+ax2.set_zlabel("Current Error (%)")
+
+place_3d_labels_and_ticks(
+    ax2,
+    x_vals=dim_labels_dict['array_size'],
+    y_vals=dim_labels_dict['memoryWindow'],
+    x_label="Array Size",
+    y_label="Memory Window",
+    zfloor=z_global_min,
+    offset=0.7
+)
+
+for m_idx in visible_models:
+    surface_data = Z_data_mem[..., m_idx]
+    ax2.plot_surface(
+        X_mem, Y_mem, surface_data,
+        rstride=1, cstride=1,
+        color=model_colors[m_idx],
+        linewidth=0, antialiased=False,
+        alpha=0.9
+    )
+
+ax2.legend(handles=legend_patches, loc='upper left', bbox_to_anchor=(1.05, 1.0))
+ax2.view_init(elev=25, azim=-60)
+fig2.tight_layout()
+plt.savefig(f"{folder}/3D_Error_ArraySize_vs_MemoryWindow.png", dpi=300, bbox_inches='tight')
+plt.show()
+
+###############################################################################
+# FIGURE 3: Array Size vs. HRS Percentage
+###############################################################################
+Z_data_hrs = np.mean(Metric, axis=(1, 2, 3))
+# shape -> (len(array_size), len(Rhrs_percentage), numModels)
+
+X_hrs, Y_hrs = create_meshgrid_for_3d(len(array_size), len(Rhrs_percentage))
+fig3 = plt.figure(figsize=(10, 7))
+ax3 = fig3.add_subplot(111, projection='3d')
+
+ax3.set_zlim(z_global_min, z_global_max)
+ax3.set_zlabel("Current Error (%)")
+
+place_3d_labels_and_ticks(
+    ax3,
+    x_vals=dim_labels_dict['array_size'],
+    y_vals=dim_labels_dict['hrsPercentage'],
+    x_label="Array Size",
+    y_label="HRS %",
+    zfloor=z_global_min,
+    offset=0.7
+)
+
+for m_idx in visible_models:
+    surface_data = Z_data_hrs[..., m_idx]
+    ax3.plot_surface(
+        X_hrs, Y_hrs, surface_data,
+        rstride=1, cstride=1,
+        color=model_colors[m_idx],
+        linewidth=0, antialiased=False,
+        alpha=0.9
+    )
+
+ax3.legend(handles=legend_patches, loc='upper left', bbox_to_anchor=(1.05, 1.0))
+ax3.view_init(elev=25, azim=-60)
+fig3.tight_layout()
+plt.savefig(f"{folder}/3D_Error_ArraySize_vs_HRSperc.png", dpi=300, bbox_inches='tight')
+plt.show()
+
+###############################################################################
+# FIGURE 4: Array Size vs. Variability Index
+###############################################################################
+Z_data_var = np.mean(Metric, axis=(1, 2, 4))
+# shape -> (len(array_size), variabilitySize, numModels)
+
+X_var, Y_var = create_meshgrid_for_3d(len(array_size), variabilitySize)
+fig4 = plt.figure(figsize=(10, 7))
+ax4 = fig4.add_subplot(111, projection='3d')
+
+ax4.set_zlim(z_global_min, z_global_max)
+ax4.set_zlabel("Current Error (%)")
+
+place_3d_labels_and_ticks(
+    ax4,
+    x_vals=dim_labels_dict['array_size'],
+    y_vals=dim_labels_dict['variability'],
+    x_label="Array Size",
+    y_label="Variability Index",
+    zfloor=z_global_min,
+    offset=0.7
+)
+
+for m_idx in visible_models:
+    surface_data = Z_data_var[..., m_idx]
+    ax4.plot_surface(
+        X_var, Y_var, surface_data,
+        rstride=1, cstride=1,
+        color=model_colors[m_idx],
+        linewidth=0, antialiased=False,
+        alpha=0.9
+    )
+
+ax4.legend(handles=legend_patches, loc='upper left', bbox_to_anchor=(1.05, 1.0))
+ax4.view_init(elev=25, azim=-60)
+fig4.tight_layout()
+plt.savefig(f"{folder}/3D_Error_ArraySize_vs_Variability.png", dpi=300, bbox_inches='tight')
+plt.show()
 
 
 

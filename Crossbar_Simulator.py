@@ -32,22 +32,23 @@ from CrossbarModels.Crossbar_Models_pytorch import gamma_model, dmr_model, jeong
 ############################ PARAMETERS ##############################
 
 # Dimensions of the crossbar
-input,output = (128,128)
+input,output = (32,32)
 
 # Initialize each model instance
 Models = [
     JeongModel("Jeong"),
-    JeongModel_avg("jeong_avg"),
+    JeongModel_avg("Jeong_avg"),
     JeongModel_avg("jeong_avg1",k=0.1),
-    JeongModel_avg("Jeong_avg2",k=0.2),
-    JeongModel_avg("Jeong_avg3",k=0.3),
-    JeongModel_avg("Jeong_avg4",k=0.4),
-    JeongModel_avg("Jeong_avg5",k=0.5),
-    JeongModel_avg("Jeong_avg6",k=0.6),
-    JeongModel_avg("Jeong_avg7",k=0.76),
-    JeongModel_avg("Jeong_avg8",k=0.8),
-    JeongModel_avg("Jeong_avg9",k=0.9),
+    JeongModel_avg("jeong_avg2",k=0.2),
+    JeongModel_avg("jeong_avg3",k=0.3),
+    JeongModel_avg("jeong_avg4",k=0.4),
+    JeongModel_avg("jeong_avg5",k=0.5),
+    JeongModel_avg("jeong_avg6",k=0.6),
+    JeongModel_avg("jeong_avg76",k=0.76),
+    JeongModel_avg("jeong_avg8",k=0.8),
+    JeongModel_avg("jeong_avg9",k=0.9),
     JeongModel_avg("jeong_avg92",k=0.92),
+    JeongModel_avg("jeong_avg95",k=0.95),
     JeongModel_avgv2("Jeong_torch"),
     IdealModel("Ideal"),
     DMRModel("DMR_old"),
@@ -90,12 +91,12 @@ new_model_functions = {
     "αβ-matrix_torch" : alpha_beta_model
 }
 enabled_models = [ "Ideal","Jeong", "αβ-matrix","αβ-matrix_torch","DMR_torch"]
-# enabled_models = [ "Ideal","Jeong","Jeong_avg","Jeong_avg6","Jeong_avg7","Jeong_avg8","Jeong_avg9"]
+enabled_models = [ "Ideal","Jeong","Jeong_avg","jeong_avg1", "jeong_avg2", "jeong_avg3", "jeong_avg4", "jeong_avg5","jeong_avg6", "jeong_avg76", "jeong_avg8","jeong_avg9", "jeong_avg92", "jeong_avg95"]
 # enabled_models = [ "Ideal","Jeong","DMR","Gamma","CrossSim1","CrossSim2", "CrossSim3", "CrossSim4", "CrossSim5", "CrossSim6", "CrossSim7", "CrossSim8", "Memtorch", "NgSpice"]
 # enabled_models = [model.name for model in Models]
 
 reference_model =  "CrossSim9"
-reference_model =  "CrossSim4"
+reference_model =  "CrossSim8"
 
 # Low resistance proggramming value
 R_lrs = 1000

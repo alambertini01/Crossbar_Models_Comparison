@@ -55,9 +55,10 @@ class JeongModel_avg(CrossbarModel):
         
         input, output = R.shape
         # Precompute cumulative sums using cumsum
-        weights = np.arange(output, 0, -1, dtype=float)
-        A_jeong = parasiticResistance * np.cumsum(weights)
-        B_jeong = parasiticResistance * np.sum(weights[::-1])
+        weights_wl = np.arange(output, 0, -1, dtype=float)
+        A_jeong = parasiticResistance * np.cumsum(weights_wl)
+        weights_bl = np.arange(input, 0, -1, dtype=float)
+        B_jeong = parasiticResistance * np.sum(weights_bl)
 
         # Calculate Rd_avg (the average resistance)
         R_hrs = R_lrs*MW

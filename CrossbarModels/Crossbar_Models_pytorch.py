@@ -19,18 +19,6 @@ def jeong_model(weight, x, parasiticResistance):
     reciprocal_weight = torch.reciprocal(weight + epsilon)  # Shape: (input_size, output_size)
     # Compute the denominator with proper broadcasting
     denominator = reciprocal_weight + B_jeong[:, None] + A_jeong[None, :] + epsilon  # Shape: (input_size, output_size)
-    # Compute weight over denominator
-    # weight_over_denominator = weight / denominator  # Shape: (input_size, output_size)
-    # Reshape tensors to include batch dimension and enable broadcasting
-    # V_a_matrix: (batch_size, input_size, 1)
-    # V_a_matrix = x.unsqueeze(2)  # Adds a dimension at the end
-    # Expand weight_over_denominator to match batch dimensions
-    # weight_over_denominator: (1, input_size, output_size)
-    # weight_over_denominator_expanded = weight_over_denominator.unsqueeze(0)
-    # Compute voltage drops
-    # voltage_drops_jeong: (batch_size, input_size, output_size)
-    # voltage_drops_jeong = weight_over_denominator_expanded * V_a_matrix  # Broadcasting over batch_size
-    # Compute currents
     # reciprocal_denominator: (input_size, output_size)
     reciprocal_denominator = torch.reciprocal(denominator)  # Shape: (input_size, output_size)
     # current_jeong: (batch_size, output_size)
