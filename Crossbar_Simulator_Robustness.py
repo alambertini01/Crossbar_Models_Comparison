@@ -57,7 +57,7 @@ work_point_robustness = False  # Toggle between modes
 
 
 # Crossbar dimensions sweep
-array_size = np.arange(16, 129, 16)
+array_size = np.arange(16, 43, 16)
 # Sparsity of the matrix
 Rhrs_percentage = np.arange(10, 100, 10)
 # Parasitic resistance
@@ -484,8 +484,10 @@ def plot_spider_chart(base_metrics,
     ######################################################################
     rename_map = {
         "Speed": "Simulation Speed",
-        "Parasitic R": "Parasitic Resistance Robustness",
         "Memory Window": "Memory window Robustness",
+        "Memory window": "Memory window Robustness",
+        "Parasitic R": "Parasitic Resistance Robustness",
+        "Parasitic Resistance": "Parasitic Resistance Robustness",
         "Parasitic R Robustness": "Parasitic Resistance Robustness",
         "HRS % Robustness": "Sparsity Robustness",
     }
@@ -575,7 +577,8 @@ def plot_spider_chart(base_metrics,
         color='gray',
         alpha=0.3
     )
-    ax.set_ylim(0, 1)
+    # Extend to 105%
+    ax.set_ylim(0, 1.05)
     for lbl in lbls:
         lbl.set_fontsize(11)
 
@@ -620,7 +623,7 @@ def plot_spider_chart(base_metrics,
             linewidth=2,
             marker=marker_style,
             markersize=6
-            # Removed the white border: no markeredgecolor
+            # No markeredgecolor for no white border
         )
         ax.fill(angles_poly, vals_poly, color=color, alpha=0.25)
 
@@ -657,12 +660,136 @@ def plot_spider_chart(base_metrics,
             bbox=dict(boxstyle="round,pad=0.4", facecolor="white", alpha=0.8)
         )
 
-    # Comment out the title as requested
+    # Title is commented out as requested
     # plt.title(f"Model Performance Radar {save_suffix}", y=1.08, fontsize=14)
 
     plt.tight_layout()
     plt.savefig(folder + f'/Figure_Spider_plot{save_suffix}.png', dpi=300)
     plt.show()
+
+
+
+####################### MAIN SPIDER PLOT LOGIC ##############################
+
+
+if work_point_robustness:
+    ########## INTERACTIVE WORK POINT MODE ##########
+    while True:
+        print("\nEnter parameter values (or 'q' to quit):")
+        
+        # Get user inputs
+        inputs = {}
+        try:
+            inputs['array_size'] = float(input(f"Array size ({array_size.tolist()}): "))
+            inputs['parasitic'] = float(input(f"Parasitic R ({parasiticResistance.tolist()}): "))
+            inputs['memory_window'] = float(input(f"Memory window ({memoryWindow.tolist()}): "))
+            inputs['variability'] = float(input(f"Variability index (0-{variabilitySize-1}): "))
+            inputs['hrs_percent'] = float(input(f"HRS % ({Rhrs_percentage.tolist()}): "))
+        except (ValueError, KeyboardInterrupt):
+            break
+            
+        # Find nearest indices
+        indices = {
+            'd0': find_nearest_index(array_size, inputs['array_size']),
+            'd1': find_nearest_index(parasiticResistance, inputs['parasitic']),
+            'd2': find_nearest_index(memoryWindow, inputs['memory_window']),
+            'd3': int(np.clip(inputs['variability'], 0, variabilitySize-1)),
+            'd4': find_nearest_index(Rhrs_percentage, inputs['hrs_percent'])
+        }
+
+        ########## Compute Metrics at Work Point ##########
+        # Base metrics
+        current_error = Current_error[indices['d0'], indices['d1'], indices['d2'], 
+                                      indices['d3'], indices['d4'], :]
+        voltage_error = Voltage_error[indices['d0'], indices['d1'], indices['d2'],
+                                      indices['d3'], indices['d4'], :]
+        sim_times = simulation_times[:, indices['d0']]
+        
+        base_metrics = {
+            'Current Accuracy': 1/(current_error[:-1] + 1e-12),
+            'Voltage Accuracy': 1/(voltage_error[:-1] + 1e-12),
+            'Speed': 1/(sim_times[:-1] + 1e-12)
+        }
+
+        ########## Compute Robustness Metrics ##########
+        robustness_metrics = {}
+        param_slices = {
+            'Array Size': Current_error[:, indices['d1'], indices['d2'], 
+                                       indices['d3'], indices['d4'], :],
+            'Parasitic R': Current_error[indices['d0'], :, indices['d2'], 
+                                        indices['d3'], indices['d4'], :],
+            'Memory Window': Current_error[indices['d0'], indices['d1'], :, 
+                                          indices['d3'], indices['d4'], :],
+            'Variability': Current_error[indices['d0'], indices['d1'], indices['d2'], 
+                                        :, indices['d4'], :],
+            'HRS %': Current_error[indices['d0'], indices['d1'], indices['d2'], 
+                                  indices['d3'], :, :]
+        }
+        
+        for param_name, slice_data in param_slices.items():
+            robustness = 1/(np.std(slice_data, axis=0) + 1e-12)[:-1]  # Exclude reference
+            robustness_metrics[f"{param_name} Robustness"] = robustness
+
+        ########## Generate Title Suffix ##########
+        title_suffix = (f"_AS{int(inputs['array_size'])}_PR{inputs['parasitic']:.1f}_"
+                      f"MW{int(inputs['memory_window'])}_VAR{int(inputs['variability'])}_"
+                      f"HRS{int(inputs['hrs_percent'])}%")
+
+        plot_spider_chart(
+            base_metrics=base_metrics,
+            robustness_metrics=robustness_metrics,
+            enabled_models=enabled_models,
+            model_colors=model_colors,
+            markers=markers,
+            show_first_model=show_first_model,
+            reference_model=reference_model,
+            param_dict=inputs,
+            is_work_point=True,
+            save_suffix=title_suffix,
+            folder=folder,
+        )
+
+else:
+    ########## AVERAGED METRICS MODE ##########
+    # Compute base metrics
+    current_error_avg = np.mean(Current_error, axis=(0,1,2,3,4))
+    voltage_error_avg = np.mean(Voltage_error, axis=(0,1,2,3,4))
+    total_sim_times = np.sum(simulation_times, axis=1)
+    
+    base_metrics = {
+        'Current Accuracy': 1/(current_error_avg[:-1] + 1e-12),
+        'Voltage Accuracy': 1/(voltage_error_avg[:-1] + 1e-12),
+        'Speed': 1/(total_sim_times[:-1] + 1e-12)
+    }
+
+    ########## Compute Robustness Metrics ##########
+    robustness_metrics = {}
+    param_dims = {
+        'Array Size': 0,
+        'Parasitic R': 1,
+        'Memory Window': 2,
+        'Variability': 3,
+        'HRS %': 4
+    }
+    
+    for param_name, dim in param_dims.items():
+        std_dev = np.std(Current_error, axis=dim)
+        robustness = 1/(np.mean(std_dev, axis=tuple(range(4))) + 1e-12)[:-1]
+        robustness_metrics[f"{param_name} Robustness"] = robustness
+
+    ########## Plot ##########
+    plot_spider_chart(
+    base_metrics=base_metrics,
+    robustness_metrics=robustness_metrics,
+    enabled_models=enabled_models,
+    model_colors=model_colors,
+    markers=markers,
+    show_first_model=show_first_model,
+    reference_model=reference_model,
+    is_work_point=False,
+    save_suffix="_AverageMetrics",
+    folder=folder,
+    )
 
     
 
