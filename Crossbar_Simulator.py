@@ -32,7 +32,7 @@ from CrossbarModels.Crossbar_Models_pytorch import gamma_model, dmr_model, jeong
 ############################ PARAMETERS ##############################
 
 # Dimensions of the crossbar
-input,output = (64,64)
+input,output = (128,128)
 
 # Initialize each model instance
 Models = [
@@ -64,7 +64,7 @@ Models = [
     alpha_beta_acc("αβ-matrix"),
     alpha_beta_acc("αβ-matrix_torch"),
     CrossSimModel("CrossSim_ref"),
-    CrossSimModel("CrossSim1",Verr_th=0.3),
+    CrossSimModel("CrossSim1",Verr_th=0.5),
     CrossSimModel("CrossSim2",Verr_th=1e-1),
     CrossSimModel("CrossSim3",Verr_th=1e-2),
     CrossSimModel("CrossSim4",Verr_th=1e-3),
@@ -102,11 +102,11 @@ R_lrs = 1000
 Rhrs_percentage=50
 # parasitic resistance value
 parasiticResistance = np.arange(0.1, 5.1, 0.1)
-parasiticResistance = np.array([4])
+parasiticResistance = np.array([2])
 
 # Memory window (ratio between Hrs and Lrs)
 memoryWindow = np.arange(5, 101, 2)
-memoryWindow = np.array([20])
+memoryWindow = np.array([40])
 
 # Input voltages parameters
 v_On_percentage = 100
@@ -117,7 +117,7 @@ Metric_type = 1
 
 # Variability parameters
 v_flag = 0
-v_size = 1
+v_size = 2
 
 
 ############################ INITIALIZATIONS ############################

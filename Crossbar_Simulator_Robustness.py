@@ -53,10 +53,11 @@ show_first_model = False
 show_reference_model = False
 current_Metric = 1
 
-robustness_flag = True  # Enable/disable 1D-slice robustness computation
+work_point_robustness = False  # Toggle between modes
+
 
 # Crossbar dimensions sweep
-array_size = np.arange(16, 100, 16)
+array_size = np.arange(16, 129, 16)
 # Sparsity of the matrix
 Rhrs_percentage = np.arange(10, 100, 10)
 # Parasitic resistance
@@ -245,473 +246,425 @@ plt.savefig(folder + '/Figure_SimulationTimes_vs_ArraySize.png')
 plt.show()
 
 ###############################################################################
-#             3D PLOTTING (SOLID COLOR PER MODEL) - LEGEND ON EACH FIG        #
+#                                3D PLOTTING                                  #
 ###############################################################################
-# Explanation:
-#   1) We skip the first model if show_first_model=False.
-#   2) We skip the reference model if show_reference_model=False.
-#   3) We compute z_global_min/max only over the "visible models."
-#   4) Each figure plots one surface per visible model, in a single color.
-#   5) A legend is placed on EACH figure, anchored outside to the right.
-#   6) We place x,y tick labels & axis labels on the floor plane (z=z_global_min).
-
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.patches as mpatches
+import matplotlib.colors as mcolors
 
-
-# Decide which models are "visible"
-visible_models = list(range(len(enabled_models)))
-
-if not show_first_model and 0 in visible_models:
-    visible_models.remove(0)
-
-if (not show_reference_model) and (reference_model in enabled_models):
-    ref_idx = enabled_models.index(reference_model)
-    if ref_idx in visible_models:
-        visible_models.remove(ref_idx)
-
-if len(visible_models) == 0:
-    print("No models to plot! Check your flags/reference_model.")
-    # Optionally return or skip the rest
-    # return
-
-# Compute the global z-range for just the visible models
-visible_data = Metric[..., visible_models]
-z_global_min = visible_data.min()
-z_global_max = visible_data.max()
-
-# Build a legend (patches) for just the visible models
-legend_patches = []
-for midx in visible_models:
-    legend_patches.append(
-        mpatches.Patch(color=model_colors[midx], label=enabled_models[midx])
-    )
-
-# Helper: build an integer-based meshgrid
+# Helper functions (repeated here for convenience):
 def create_meshgrid_for_3d(x_len, y_len):
+    """Create integer-based meshgrids for X, Y of shape (x_len, y_len)."""
     return np.meshgrid(np.arange(x_len), np.arange(y_len), indexing='ij')
 
-# Helper: place X/Y labels & ticks on the "floor" (z=z_global_min) so they don't overlap
 def place_3d_labels_and_ticks(ax, x_vals, y_vals, x_label, y_label, zfloor, offset=0.7):
     """
     Removes default axis ticks and places text labels in 3D at z=zfloor,
-    'near' the edges. Adjust offset & rotation as needed.
+    near the edges. Adjust offset & rotation as needed.
     """
     ax.set_xticks([])
     ax.set_yticks([])
 
-    # Place X ticks along the "front edge" (y=-offset)
+    # Place X ticks along the "front edge" (y = -offset)
     for i, lbl in enumerate(x_vals):
         ax.text(i, -offset, zfloor, lbl, ha='center', va='top', rotation=0, color='black')
 
-    # Place Y ticks along the "left edge" (x=-offset)
+    # Place Y ticks along the "left edge" (x = -offset)
     for j, lbl in enumerate(y_vals):
         ax.text(-offset, j, zfloor, lbl, ha='right', va='center', rotation=90, color='black')
 
     # Axis labels in the "front-left corner"
-    ax.text(
-        (len(x_vals) - 1) / 2, -2*offset, zfloor,
-        x_label, ha='center', va='top', color='black'
-    )
-    ax.text(
-        -2*offset, (len(y_vals) - 1) / 2, zfloor,
-        y_label, ha='center', va='center', rotation=90, color='black'
-    )
+    ax.text((len(x_vals) - 1) / 2, -2 * offset, zfloor, x_label, 
+            ha='center', va='top', color='black')
+    ax.text(-2 * offset, (len(y_vals) - 1) / 2, zfloor, y_label, 
+            ha='center', va='center', rotation=90, color='black')
+
+def get_surface_colors(z_data, base_color_rgba, zmin, zmax, dark_factor=0.4):
+    """
+    Returns an (n,m,4) array of RGBA values that interpolates from a darker
+    variant of `base_color_rgba` (at z=zmin) up to the base color (at z=zmax).
+    """
+    n, m = z_data.shape
+    facecolors = np.zeros((n, m, 4))
+    # Darker version of the base color
+    dark_rgba = np.array([base_color_rgba[0] * dark_factor,
+                          base_color_rgba[1] * dark_factor,
+                          base_color_rgba[2] * dark_factor,
+                          1.0])
+    base_arr = np.array(base_color_rgba)
+
+    for i in range(n):
+        for j in range(m):
+            # Normalize z between 0 and 1
+            ratio = (z_data[i, j] - zmin) / max((zmax - zmin), 1e-12)
+            ratio = np.clip(ratio, 0, 1)
+            # Linear interpolation between dark_rgba and base_color
+            facecolors[i, j] = dark_rgba + ratio * (base_arr - dark_rgba)
+
+    return facecolors
+
+# Decide which models are "visible"
+visible_models = list(range(len(enabled_models)))
+if not show_first_model and 0 in visible_models:
+    visible_models.remove(0)
+if (not show_reference_model) and (reference_model in enabled_models):
+    ref_idx = enabled_models.index(reference_model)
+    if ref_idx in visible_models:
+        visible_models.remove(ref_idx)
+if len(visible_models) == 0:
+    print("No models to plot! Check your flags/reference_model.")
+    # If there are no models to plot, you can skip or return
+    # return
+
+# Build a legend (patches) for just the visible models
+legend_patches = [
+    mpatches.Patch(color=model_colors[midx], label=enabled_models[midx])
+    for midx in visible_models
+]
+
+# Compute global z-range from the visible models only
+visible_data = Metric[..., visible_models]
+z_global_min = visible_data.min()
+z_global_max = visible_data.max()
 
 # Dimension labels for each axis
 dim_labels_dict = {
-    'array_size': [f"{sz}x{sz}" for sz in array_size],
+    'array_size'        : [f"{sz}x{sz}" for sz in array_size],
     'parasiticResistance': [f"{p:.2f}" for p in parasiticResistance],
-    'memoryWindow': [f"{mw}" for mw in memoryWindow],
-    'hrsPercentage': [f"{r}%" for r in Rhrs_percentage],
-    'variability': [str(v) for v in range(variabilitySize)],
+    'memoryWindow'      : [f"{mw}" for mw in memoryWindow],
+    'hrsPercentage'     : [f"{r}%" for r in Rhrs_percentage],
+    'variability'       : [str(v) for v in range(variabilitySize)],
 }
 
 ###############################################################################
-# FIGURE 1: Array Size vs. Parasitic Resistance
+# Define each 3D plot configuration in a list of dicts
 ###############################################################################
-Z_data_par = np.mean(Metric, axis=(2, 3, 4))
-# shape -> (len(array_size), len(parasiticResistance), numModels)
+plot_configs = [
+    {
+        'title'   : "3D_Error_ArraySize_vs_Parasitic",
+        'Z_data'  : np.mean(Metric, axis=(2, 3, 4)),  # shape (len(array_size), len(parasiticResistance), #models)
+        'x_vals'  : array_size,
+        'y_vals'  : parasiticResistance,
+        'x_label' : "Array Size",
+        'y_label' : "Parasitic R",
+        'x_ticks' : dim_labels_dict['array_size'],
+        'y_ticks' : dim_labels_dict['parasiticResistance']
+    },
+    {
+        'title'   : "3D_Error_ArraySize_vs_MemoryWindow",
+        'Z_data'  : np.mean(Metric, axis=(1, 3, 4)),  # shape (len(array_size), len(memoryWindow), #models)
+        'x_vals'  : array_size,
+        'y_vals'  : memoryWindow,
+        'x_label' : "Array Size",
+        'y_label' : "Memory Window",
+        'x_ticks' : dim_labels_dict['array_size'],
+        'y_ticks' : dim_labels_dict['memoryWindow']
+    },
+    {
+        'title'   : "3D_Error_ArraySize_vs_HRSperc",
+        'Z_data'  : np.mean(Metric, axis=(1, 2, 3)),  # shape (len(array_size), len(Rhrs_percentage), #models)
+        'x_vals'  : array_size,
+        'y_vals'  : Rhrs_percentage,
+        'x_label' : "Array Size",
+        'y_label' : "HRS %",
+        'x_ticks' : dim_labels_dict['array_size'],
+        'y_ticks' : dim_labels_dict['hrsPercentage']
+    },
+    {
+        'title'   : "3D_Error_ArraySize_vs_Variability",
+        'Z_data'  : np.mean(Metric, axis=(1, 2, 4)),  # shape (len(array_size), variabilitySize, #models)
+        'x_vals'  : array_size,
+        'y_vals'  : np.arange(variabilitySize),
+        'x_label' : "Array Size",
+        'y_label' : "Variability Index",
+        'x_ticks' : dim_labels_dict['array_size'],
+        'y_ticks' : dim_labels_dict['variability']
+    }
+]
 
-X_par, Y_par = create_meshgrid_for_3d(len(array_size), len(parasiticResistance))
-fig1 = plt.figure(figsize=(10, 7))
-ax1 = fig1.add_subplot(111, projection='3d')
+###############################################################################
+# Main Loop: Generate each 3D plot using the above configurations
+###############################################################################
+for config in plot_configs:
+    # Prepare data
+    Z_data = config['Z_data']  # shape -> (Nx, Ny, #models)
+    Nx, Ny, _ = Z_data.shape
+    
+    # Create the integer-based meshgrids
+    X, Y = create_meshgrid_for_3d(Nx, Ny)
 
-# Z range
-ax1.set_zlim(z_global_min, z_global_max)
-ax1.set_zlabel("Current Error (%)")
+    # Create the figure and axis
+    fig = plt.figure(figsize=(10, 7))
+    ax = fig.add_subplot(111, projection='3d')
 
-# Place custom ticks/labels on floor
-place_3d_labels_and_ticks(
-    ax1,
-    x_vals=dim_labels_dict['array_size'],
-    y_vals=dim_labels_dict['parasiticResistance'],
-    x_label="Array Size",
-    y_label="Parasitic R",
-    zfloor=z_global_min,
-    offset=0.7
-)
+    # Set Z-limits and label
+    ax.set_zlim(z_global_min, z_global_max)
+    ax.set_zlabel(error_label)
 
-# Plot each visible model
-for m_idx in visible_models:
-    surface_data = Z_data_par[..., m_idx]
-    ax1.plot_surface(
-        X_par, Y_par, surface_data,
-        rstride=1, cstride=1,
-        color=model_colors[m_idx],
-        linewidth=0, antialiased=False,
-        alpha=0.9
+    # Place custom ticks/labels on the "floor"
+    place_3d_labels_and_ticks(
+        ax,
+        x_vals=config['x_ticks'],
+        y_vals=config['y_ticks'],
+        x_label=config['x_label'],
+        y_label=config['y_label'],
+        zfloor=z_global_min,
+        offset=0.7
     )
 
-# Add legend on the right
-ax1.legend(handles=legend_patches, loc='upper left', bbox_to_anchor=(1.05, 1.0))
-ax1.view_init(elev=25, azim=-60)
-fig1.tight_layout()
-plt.savefig(f"{folder}/3D_Error_ArraySize_vs_Parasitic.png", dpi=300, bbox_inches='tight')
-plt.show()
+    # Plot each visible model with shading
+    for m_idx in visible_models:
+        surface_data = Z_data[..., m_idx]
+        
+        # Convert base color name to RGBA
+        base_rgba = mcolors.to_rgba(model_colors[m_idx])
+        
+        # Build a color array that maps z-values to a lighter/darker shade
+        facecolors = get_surface_colors(surface_data, base_rgba, z_global_min, z_global_max)
+
+        ax.plot_surface(
+            X, Y, surface_data,
+            rstride=1, cstride=1,
+            facecolors=facecolors,
+            shade=False,  # We handle shading via facecolors
+            linewidth=0,
+            antialiased=False,
+            alpha=1.0
+        )
+
+    # Add legend on the right
+    ax.legend(handles=legend_patches, loc='upper left', bbox_to_anchor=(1.05, 1.0))
+
+    # Adjust view angle
+    ax.view_init(elev=25, azim=-60)
+    fig.tight_layout()
+
+    # Save and show
+    save_name = f"{folder}/{config['title']}.png"
+    plt.savefig(save_name, dpi=300, bbox_inches='tight')
+    plt.show()
+
+
+
+
+
 
 ###############################################################################
-# FIGURE 2: Array Size vs. Memory Window
+#                         SPIDER PLOT & ROBUSTNESS CODE                       #
 ###############################################################################
-Z_data_mem = np.mean(Metric, axis=(1, 3, 4))
-# shape -> (len(array_size), len(memoryWindow), numModels)
-
-X_mem, Y_mem = create_meshgrid_for_3d(len(array_size), len(memoryWindow))
-fig2 = plt.figure(figsize=(10, 7))
-ax2 = fig2.add_subplot(111, projection='3d')
-
-ax2.set_zlim(z_global_min, z_global_max)
-ax2.set_zlabel("Current Error (%)")
-
-place_3d_labels_and_ticks(
-    ax2,
-    x_vals=dim_labels_dict['array_size'],
-    y_vals=dim_labels_dict['memoryWindow'],
-    x_label="Array Size",
-    y_label="Memory Window",
-    zfloor=z_global_min,
-    offset=0.7
-)
-
-for m_idx in visible_models:
-    surface_data = Z_data_mem[..., m_idx]
-    ax2.plot_surface(
-        X_mem, Y_mem, surface_data,
-        rstride=1, cstride=1,
-        color=model_colors[m_idx],
-        linewidth=0, antialiased=False,
-        alpha=0.9
-    )
-
-ax2.legend(handles=legend_patches, loc='upper left', bbox_to_anchor=(1.05, 1.0))
-ax2.view_init(elev=25, azim=-60)
-fig2.tight_layout()
-plt.savefig(f"{folder}/3D_Error_ArraySize_vs_MemoryWindow.png", dpi=300, bbox_inches='tight')
-plt.show()
-
-###############################################################################
-# FIGURE 3: Array Size vs. HRS Percentage
-###############################################################################
-Z_data_hrs = np.mean(Metric, axis=(1, 2, 3))
-# shape -> (len(array_size), len(Rhrs_percentage), numModels)
-
-X_hrs, Y_hrs = create_meshgrid_for_3d(len(array_size), len(Rhrs_percentage))
-fig3 = plt.figure(figsize=(10, 7))
-ax3 = fig3.add_subplot(111, projection='3d')
-
-ax3.set_zlim(z_global_min, z_global_max)
-ax3.set_zlabel("Current Error (%)")
-
-place_3d_labels_and_ticks(
-    ax3,
-    x_vals=dim_labels_dict['array_size'],
-    y_vals=dim_labels_dict['hrsPercentage'],
-    x_label="Array Size",
-    y_label="HRS %",
-    zfloor=z_global_min,
-    offset=0.7
-)
-
-for m_idx in visible_models:
-    surface_data = Z_data_hrs[..., m_idx]
-    ax3.plot_surface(
-        X_hrs, Y_hrs, surface_data,
-        rstride=1, cstride=1,
-        color=model_colors[m_idx],
-        linewidth=0, antialiased=False,
-        alpha=0.9
-    )
-
-ax3.legend(handles=legend_patches, loc='upper left', bbox_to_anchor=(1.05, 1.0))
-ax3.view_init(elev=25, azim=-60)
-fig3.tight_layout()
-plt.savefig(f"{folder}/3D_Error_ArraySize_vs_HRSperc.png", dpi=300, bbox_inches='tight')
-plt.show()
-
-###############################################################################
-# FIGURE 4: Array Size vs. Variability Index
-###############################################################################
-Z_data_var = np.mean(Metric, axis=(1, 2, 4))
-# shape -> (len(array_size), variabilitySize, numModels)
-
-X_var, Y_var = create_meshgrid_for_3d(len(array_size), variabilitySize)
-fig4 = plt.figure(figsize=(10, 7))
-ax4 = fig4.add_subplot(111, projection='3d')
-
-ax4.set_zlim(z_global_min, z_global_max)
-ax4.set_zlabel("Current Error (%)")
-
-place_3d_labels_and_ticks(
-    ax4,
-    x_vals=dim_labels_dict['array_size'],
-    y_vals=dim_labels_dict['variability'],
-    x_label="Array Size",
-    y_label="Variability Index",
-    zfloor=z_global_min,
-    offset=0.7
-)
-
-for m_idx in visible_models:
-    surface_data = Z_data_var[..., m_idx]
-    ax4.plot_surface(
-        X_var, Y_var, surface_data,
-        rstride=1, cstride=1,
-        color=model_colors[m_idx],
-        linewidth=0, antialiased=False,
-        alpha=0.9
-    )
-
-ax4.legend(handles=legend_patches, loc='upper left', bbox_to_anchor=(1.05, 1.0))
-ax4.view_init(elev=25, azim=-60)
-fig4.tight_layout()
-plt.savefig(f"{folder}/3D_Error_ArraySize_vs_Variability.png", dpi=300, bbox_inches='tight')
-plt.show()
-
-
-
-######################## SPIDER PLOT FUNCTION ########################
+####################### SPIDER PLOT FUNCTION ##############################
 
 def find_nearest_index(array, value):
     """Return index of array element closest to 'value'."""
     arr_np = np.array(array)
     return np.abs(arr_np - value).argmin()
 
-def plot_spider_chart(base_metrics, robustness_metrics, title_suffix="", save_folder="Results"):
-    """
-    Same logic as your original spider plot. 
-    base_metrics, robustness_metrics must each be length (#models) or (#models-1).
-    title_suffix is appended to the figure title and filename. 
-    """
-    # Merge metrics
-    all_metrics = {**base_metrics, **robustness_metrics}
-    # Filter out non-finite
-    valid_metrics = {k: v for k, v in all_metrics.items() if np.all(np.isfinite(v))}
+def plot_spider_chart(base_metrics,
+                      robustness_metrics,
+                      enabled_models,
+                      model_colors,
+                      markers,
+                      show_first_model=False,
+                      reference_model=None,
+                      param_dict=None,
+                      is_work_point=False,
+                      save_suffix="",
+                      folder="Results"):
 
-    # Prepare for plotting
-    labels = list(valid_metrics.keys())
-    metrics = np.array(list(valid_metrics.values()))  # shape: (#metrics, #models or #models-1)
+    import textwrap
+    import matplotlib.lines as mlines
+    import matplotlib.colors as mcolors
+    import numpy as np
+    import matplotlib.pyplot as plt
 
-    # Angles for the spider chart
-    angles = [n / float(len(labels)) * 2 * np.pi for n in range(len(labels))]
-    angles += angles[:1]  # close the polygon
-
-    # Normalization logic (same as your code)
-    if show_first_model:
-        metrics_scaled = metrics / metrics.max(axis=1, keepdims=True)
-    else:
-        # Exclude the first column from the maximum, as in your original code
-        metrics_scaled = metrics / metrics[:, 1:].max(axis=1, keepdims=True)
-
-    # Create the figure
-    fig, ax = plt.subplots(figsize=(8, 6), subplot_kw={'polar': True})
-    ax.spines['polar'].set_visible(False)
-    ax.set_facecolor('#f9f9f9')
-    ax.set_yticks([])
-    ax.set_rgrids([0.2, 0.4, 0.6, 0.8, 1.0],
-                  labels=['0.2', '0.4', '0.6', '0.8', '1.0'],
-                  angle=0,
-                  color='gray',
-                  alpha=0.2)
-
-    # Plot each model
-    model_colors = colors[:len(enabled_models)]
-    for i, (model_name, color) in enumerate(zip(enabled_models, model_colors)):
-        # Skip the last model if that is your reference (like in your original code).
-        # Typically you used `enabled_models[:-1]`. So let's do the same:
-        if i == len(enabled_models) - 1:
-            break
-
-        # If the user doesn't want to show the first model:
-        if i == 0 and not show_first_model:
-            continue
-
-        # metrics_scaled has shape (#metrics, #models). The i-th column is the i-th model.
-        vals = metrics_scaled[:, i].tolist()
-        vals += vals[:1]  # close the polygon
-        ax.plot(angles, vals, label=model_name, color=color, linewidth=2)
-        ax.fill(angles, vals, color=color, alpha=0.25)
-
-    ax.set_xticks(angles[:-1])
-    ax.set_xticklabels([lbl.replace(' ', '\n') for lbl in labels])
-    ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.1), title="Models")
-
-    plt.title(f"Spider Plot {title_suffix}", y=1.08)
-    fig.tight_layout()
-
-    # Save & show
-    fig_fn = f"{save_folder}/SpiderPlot{title_suffix}.png"
-    plt.savefig(fig_fn, dpi=300)
-    plt.show()
-
-####################### MAIN INTERACTIVE LOOP ##########################
-
-
-robustness_flag = True  # toggle the 1D-slice approach if True
-
-while True:
-    print("\nEnter the desired values for each parameter, or type 'q' to quit.\n")
-
-    # 1) Array Size
-    user_in = input(f"array_size options={list(array_size)}: ")
-    if user_in.lower() == 'q':
-        break
-    try:
-        arr_val = float(user_in)
-    except ValueError:
-        print("Invalid input.")
-        continue
-
-    # 2) Parasitic Resistance
-    user_in = input(
-        f"parasiticResistance ~ from {parasiticResistance[0]} to {parasiticResistance[-1]}: "
-    )
-    if user_in.lower() == 'q':
-        break
-    try:
-        pr_val = float(user_in)
-    except ValueError:
-        print("Invalid input.")
-        continue
-
-    # 3) Memory Window
-    user_in = input(f"memoryWindow options={list(memoryWindow)}: ")
-    if user_in.lower() == 'q':
-        break
-    try:
-        mw_val = float(user_in)
-    except ValueError:
-        print("Invalid input.")
-        continue
-
-    # 4) Variability Index
-    user_in = input(f"variability index from 0 to {variabilitySize - 1}: ")
-    if user_in.lower() == 'q':
-        break
-    try:
-        var_val = float(user_in)
-    except ValueError:
-        print("Invalid input.")
-        continue
-
-    # 5) Hrs Percentage
-    user_in = input(f"Hrs Percentage options={list(Rhrs_percentage)}: ")
-    if user_in.lower() == 'q':
-        break
-    try:
-        hrs_val = float(user_in)
-    except ValueError:
-        print("Invalid input.")
-        continue
-
-    # Determine the nearest indices
-    d0 = find_nearest_index(array_size, arr_val)
-    d1 = find_nearest_index(parasiticResistance, pr_val)
-    d2 = find_nearest_index(memoryWindow, mw_val)
-    d3 = find_nearest_index(range(variabilitySize), var_val)
-    d4 = find_nearest_index(Rhrs_percentage, hrs_val)
-
-    ########## Compute base metrics (Current & Voltage Accuracy, Speed) ##########
-
-    # Original approach: 
-    # if not robust_flag => average across all dimensions.
-    # if robust_flag => we do a single slice for each dimension.
-
-    if not robustness_flag:
-        # This is your original 5D average approach
-        current_error_mean = np.mean(Current_error, axis=(0, 1, 2, 3, 4))  # shape (modelSize,)
-        voltage_error_mean = np.mean(Voltage_error, axis=(0, 1, 2, 3, 4))
-        sum_sim_times      = np.sum(simulation_times, axis=1)  # shape (modelSize,)
-    else:
-        # 1D-slice approach: fix indices for the rest
-        # So current_error_mean is the slice across model dimension
-        # which has shape (modelSize,)
-        current_error_mean = Current_error[d0, d1, d2, d3, d4, :]
-        voltage_error_mean = Voltage_error[d0, d1, d2, d3, d4, :]
-        # For the times, you might want a single array_size => d0
-        # or you might do something else. Let's replicate the same logic:
-        sum_sim_times = simulation_times[:, d0]  # shape (modelSize,)
-        # (If you'd rather keep the total sum across dimension, comment out the above line 
-        # and do sum_simulation_times = np.sum(simulation_times, axis=1))
-
-    # We skip the last index (reference model) to match your original "[:-1]" usage
-    # because you do that in base_metrics below
-    base_metrics = {
-        'Current Accuracy': 1.0 / current_error_mean[:-1],  # invert the error => "accuracy"
-        'Voltage Accuracy': 1.0 / voltage_error_mean[:-1],
-        'Simulation Speed': 1.0 / sum_sim_times[:-1]
+    ######################################################################
+    # 0) KEY RENAME MAP
+    ######################################################################
+    rename_map = {
+        "Speed": "Simulation Speed",
+        "Parasitic R": "Parasitic Resistance Robustness",
+        "Memory Window": "Memory window Robustness",
+        "Parasitic R Robustness": "Parasitic Resistance Robustness",
+        "HRS % Robustness": "Sparsity Robustness",
     }
 
-    ########## Compute robustness metrics ##########
-    if not robustness_flag:
-        # Original multi-dimensional averaging approach
-        arr_rob   = np.reciprocal(np.mean(np.std(Current_error, axis=0), axis=(0,1,2,3))[:-1])
-        pr_rob    = np.reciprocal(np.mean(np.std(Current_error, axis=1), axis=(0,1,2,3))[:-1])
-        mw_rob    = np.reciprocal(np.mean(np.std(Current_error, axis=2), axis=(0,1,2,3))[:-1])
-        var_rob   = np.reciprocal(np.mean(np.std(Current_error, axis=3), axis=(0,1,2,3))[:-1])
-        spars_rob = np.reciprocal(np.mean(np.std(Current_error, axis=4), axis=(0,1,2,3))[:-1])
+    def rename_if_needed(metric_key):
+        return rename_map[metric_key] if metric_key in rename_map else metric_key
 
-        robustness_metrics = {
-            'Array Size Robustness': arr_rob,
-            'Parasitic Resistance Robustness': pr_rob,
-            'Memory Window Robustness': mw_rob,
-            'Variability Robustness': var_rob,
-            'Sparsity Robustness': spars_rob
-        }
+    ######################################################################
+    # 1) MERGE METRICS + RENAME
+    ######################################################################
+    mandatory_order = ["Simulation Speed", "Current Accuracy", "Voltage Accuracy"]
+    all_metrics = {}
+
+    # Insert mandatory metrics first (renaming if needed)
+    for key in ["Speed", "Current Accuracy", "Voltage Accuracy"]:
+        if key in base_metrics:
+            new_key = rename_if_needed(key)
+            all_metrics[new_key] = base_metrics[key]
+
+    # Add remaining base metrics
+    for k, v in base_metrics.items():
+        new_k = rename_if_needed(k)
+        if new_k not in all_metrics:
+            all_metrics[new_k] = v
+
+    # Add robustness metrics
+    for k, v in robustness_metrics.items():
+        new_k = rename_if_needed(k)
+        all_metrics[new_k] = v
+
+    # Filter out invalid (NaN/Inf) arrays
+    valid_metrics = {
+        k: v for k, v in all_metrics.items()
+        if (v is not None) and np.all(np.isfinite(v))
+    }
+    if len(valid_metrics) == 0:
+        print("No valid metrics to plot. Exiting radar.")
+        return
+
+    labels = list(valid_metrics.keys())                # e.g. ["Simulation Speed", "Current Accuracy", ...]
+    metrics = np.array(list(valid_metrics.values()))   # shape => (N, M) => N metrics x M models
+    num_metrics = len(labels)
+    num_models = metrics.shape[1]
+
+    if num_metrics < 2:
+        print("Radar chart requires at least 2 metrics. Exiting.")
+        return
+
+    ######################################################################
+    # 2) NORMALIZE DATA [0..1]
+    ######################################################################
+    if show_first_model:
+        max_vals = metrics.max(axis=1, keepdims=True) + 1e-12
     else:
-        # 1D-slice approach for each dimension (fix the others)
-        # We'll do it for Current_error (or Voltage_error) as in the example
-        arr_slice   = Current_error[:,  d1, d2, d3, d4, :]  # vary array_size
-        pr_slice    = Current_error[d0, :,  d2, d3, d4, :]  # vary pr
-        mw_slice    = Current_error[d0,  d1, :,  d3, d4, :] # vary mw
-        var_slice   = Current_error[d0,  d1, d2, :,  d4, :] # vary var
-        hrs_slice   = Current_error[d0,  d1, d2, d3, :,  :] # vary hrs
+        if num_models > 1:
+            max_vals = metrics[:, 1:].max(axis=1, keepdims=True) + 1e-12
+        else:
+            max_vals = metrics.max(axis=1, keepdims=True) + 1e-12
 
-        arr_rob   = np.reciprocal(np.std(arr_slice, axis=0) + 1e-12)[:-1]
-        pr_rob    = np.reciprocal(np.std(pr_slice,  axis=0) + 1e-12)[:-1]
-        mw_rob    = np.reciprocal(np.std(mw_slice,  axis=0) + 1e-12)[:-1]
-        var_rob   = np.reciprocal(np.std(var_slice, axis=0) + 1e-12)[:-1]
-        hrs_rob   = np.reciprocal(np.std(hrs_slice, axis=0) + 1e-12)[:-1]
+    metrics_scaled = metrics / max_vals
 
-        robustness_metrics = {
-            'Array Size Robustness': arr_rob,
-            'Parasitic Resistance Robustness': pr_rob,
-            'Memory Window Robustness': mw_rob,
-            'Variability Robustness': var_rob,
-            'Sparsity Robustness': hrs_rob
-        }
+    ######################################################################
+    # 3) RADAR PLOT SETUP
+    ######################################################################
+    angles_base = [n / float(num_metrics) * 2 * np.pi for n in range(num_metrics)]
+    angles_poly = angles_base + angles_base[:1]
 
-    ########## Create a suffix for the figure name ##########
-    title_suffix = (
-        f"_as{array_size[d0]}_pr{parasiticResistance[d1]:.2f}"
-        f"_mw{memoryWindow[d2]}_var{d3}_hrs{Rhrs_percentage[d4]}"
+    fig, ax = plt.subplots(figsize=(6, 4), subplot_kw={'polar': True})
+    ax.set_facecolor('#f9f9f9')
+    ax.spines['polar'].set_visible(False)
+
+    ax.set_theta_offset(np.pi / 2)
+    ax.set_theta_direction(-1)
+
+    # Hide default radial ticks
+    ax.set_yticks([])
+
+    ax.grid(color='gray', linestyle='--', linewidth=0.5, alpha=0.5)
+
+    # Set radial ticks as percentages
+    radial_ticks = [0.2, 0.4, 0.6, 0.8, 1.0]
+    radial_tick_labels = [f"{int(rt * 100)}%" for rt in radial_ticks]
+    lines, lbls = ax.set_rgrids(
+        radial_ticks,
+        labels=radial_tick_labels,
+        angle=0,
+        color='gray',
+        alpha=0.3
+    )
+    ax.set_ylim(0, 1)
+    for lbl in lbls:
+        lbl.set_fontsize(11)
+
+    ######################################################################
+    # 4) METRIC LABELS AROUND THE CIRCLE
+    ######################################################################
+    def two_line_label(text, width=12):
+        wrapped = textwrap.wrap(text, width=width)
+        return "\n".join(wrapped[:2])  # up to 2 lines
+
+    wrapped_labels = [two_line_label(lbl, width=12) for lbl in labels]
+
+    ax.set_xticks(angles_base)
+    ax.set_xticklabels(wrapped_labels, fontsize=11)
+    # Increase distance of labels from the circle
+    ax.tick_params(axis='x', pad=15)
+
+    ######################################################################
+    # 5) PLOT EACH MODEL’S POLYGON
+    ######################################################################
+    legend_handles = []
+    for i, model_name in enumerate(enabled_models):
+        # Skip first model if user says so
+        if i == 0 and not show_first_model:
+            continue
+        # Skip reference model if needed
+        if reference_model and model_name == reference_model:
+            continue
+        if i >= num_models:
+            break
+
+        vals = metrics_scaled[:, i].tolist()
+        vals_poly = vals + vals[:1]
+
+        color = model_colors[i]
+        marker_style = markers[i % len(markers)]
+
+        ax.plot(
+            angles_poly, vals_poly,
+            label=model_name,
+            color=color,
+            linewidth=2,
+            marker=marker_style,
+            markersize=6
+            # Removed the white border: no markeredgecolor
+        )
+        ax.fill(angles_poly, vals_poly, color=color, alpha=0.25)
+
+        legend_line = mlines.Line2D(
+            [], [], color=color,
+            marker=marker_style,
+            markersize=6,
+            linewidth=2,
+            label=model_name
+        )
+        legend_handles.append(legend_line)
+
+    ######################################################################
+    # 6) LEGEND + OPTIONAL BOX
+    ######################################################################
+    ax.legend(
+        handles=legend_handles,
+        loc='upper right',
+        bbox_to_anchor=(1.6, 1.0),
+        title="Models",
+        fontsize=11,
+        title_fontsize=11
     )
 
-    ########## Plot the Spider Chart ##########
-    plot_spider_chart(base_metrics, robustness_metrics, title_suffix, folder)
+    if is_work_point and param_dict is not None:
+        info_str = "Chosen Work Point:\n"
+        for k, v in param_dict.items():
+            info_str += f"  {k}: {v}\n"
+        plt.gcf().text(
+            0.02, 0.95, info_str,
+            fontsize=9,
+            va='top',
+            ha='left',
+            bbox=dict(boxstyle="round,pad=0.4", facecolor="white", alpha=0.8)
+        )
 
-    print("Figure saved. Close it to enter new parameters or press Ctrl+C to stop.")
+    # Comment out the title as requested
+    # plt.title(f"Model Performance Radar {save_suffix}", y=1.08, fontsize=14)
+
+    plt.tight_layout()
+    plt.savefig(folder + f'/Figure_Spider_plot{save_suffix}.png', dpi=300)
+    plt.show()
+
+    
 
 
 ###################### 3) Error vs Different Data #####################
