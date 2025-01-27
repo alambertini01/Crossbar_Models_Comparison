@@ -24,8 +24,8 @@ if __name__ == '__main__':
     R_lrs = 1e3
     
     parasitic_resistances = torch.arange(2.00001, 2.1, 0.1).tolist()
-    max_array_size = 16
-    model_functions = [ crosssim_model,solve_passive_model]
+    max_array_size = 64
+    model_functions = [ crosssim_model]
     bias_correction = False
     debug_plot = False
     debug_index = 0
@@ -37,7 +37,7 @@ if __name__ == '__main__':
     # Parameters to potentially sweep
     #R_hrs_values = torch.linspace(10000, 200000, steps=20).tolist()
     R_hrs_values = 40000
-    bits_values = 0
+    bits_values = 6
 
     # *************** Determine Sweeps ***************
     # Convert R_hrs_values and bits_values into lists if they aren't already

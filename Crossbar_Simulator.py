@@ -32,7 +32,7 @@ from CrossbarModels.Crossbar_Models_pytorch import gamma_model, dmr_model, jeong
 ############################ PARAMETERS ##############################
 
 # Dimensions of the crossbar
-input,output = (64,64)
+input,output = (32,32)
 
 # Initialize each model instance
 Models = [
@@ -90,23 +90,23 @@ new_model_functions = {
     "CrossSim_torch" : crosssim_model,
     "αβ-matrix_torch" : alpha_beta_model
 }
-enabled_models = [ "Ideal","Jeong", "αβ-matrix","αβ-matrix_torch","DMR_torch"]
+enabled_models = [ "Ideal","Jeong_avg", "αβ-matrix"]
 #enabled_models = [ "Ideal","Jeong","Jeong_avg","jeong_avg1", "jeong_avg2", "jeong_avg3", "jeong_avg4", "jeong_avg5","jeong_avg6", "jeong_avg76", "jeong_avg8","jeong_avg9", "jeong_avg92", "jeong_avg95"]
-enabled_models = [ "Ideal","Jeong","DMR","αβ-matrix","CrossSim1","CrossSim2", "CrossSim3", "CrossSim4", "CrossSim5", "CrossSim6", "CrossSim7", "CrossSim8", "Memtorch", "NgSpice"]
+# enabled_models = [ "Ideal","Jeong","DMR","αβ-matrix","CrossSim1","CrossSim2", "CrossSim3", "CrossSim4", "CrossSim5", "CrossSim6", "CrossSim7", "CrossSim8", "Memtorch", "NgSpice"]
 # enabled_models = [model.name for model in Models]
 
-reference_model =  "NgSpice"
+reference_model =  "CrossSim7"
 
 # Low resistance proggramming value
 R_lrs = 1000
 Rhrs_percentage=50
 # parasitic resistance value
 parasiticResistance = np.arange(0.1, 5.1, 0.1)
-parasiticResistance = np.array([4])
+# parasiticResistance = np.array([4])
 
 # Memory window (ratio between Hrs and Lrs)
 memoryWindow = np.arange(5, 101, 2)
-memoryWindow = np.array([20])
+# memoryWindow = np.array([20])
 
 # Input voltages parameters
 v_On_percentage = 100
@@ -117,7 +117,7 @@ Metric_type = 1
 
 # Variability parameters
 v_flag = 0
-v_size = 1
+v_size = 30
 
 
 ############################ INITIALIZATIONS ############################

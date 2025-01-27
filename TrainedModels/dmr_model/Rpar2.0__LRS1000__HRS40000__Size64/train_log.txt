@@ -7,8 +7,8 @@ Max Array Size: 64
 Hidden Layer Size: 128
 Batch Size: 128
 Learning Rate: 0.002
-Epochs: 20
-Early Stop Accuracy: 97.0%
-Final Training Accuracy: 97.04%
-Test Accuracy: 95.31%
-Total Training Time (s): 616.2146
+Epochs: 10
+Early Stop Accuracy: 99%
+Final Training Accuracy: 95.60%
+Test Accuracy: 95.08%
+Total Training Time (s): 399.1707
