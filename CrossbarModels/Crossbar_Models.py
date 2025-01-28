@@ -47,7 +47,7 @@ class JeongModel(CrossbarModel):
 
 
 class JeongModel_avg(CrossbarModel):
-    def __init__(self, name, k = 0.9):
+    def __init__(self, name, k = 0.95):
         super().__init__(name)
         self.k = k
 
