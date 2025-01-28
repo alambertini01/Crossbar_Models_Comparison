@@ -32,12 +32,12 @@ from CrossbarModels.Crossbar_Models_pytorch import gamma_model, dmr_model, jeong
 ############################ PARAMETERS ##############################
 
 # Dimensions of the crossbar
-input,output = (128,128)
+input,output = (32,32)
 
 # Initialize each model instance
 Models = [
-    JeongModel("Jeong"),
-    JeongModel_avg("Jeong_avg"),
+    JeongModel("Jeongv1"),
+    JeongModel_avg("Jeong"),
     JeongModel_avg("jeong_avg1",k=0.1),
     JeongModel_avg("jeong_avg2",k=0.2),
     JeongModel_avg("jeong_avg3",k=0.3),
@@ -90,19 +90,19 @@ new_model_functions = {
     "CrossSim_torch" : crosssim_model,
     "αβ-matrix_torch" : alpha_beta_model
 }
-enabled_models = [ "Ideal","Jeong_avg", "αβ-matrix"]
-#enabled_models = [ "Ideal","Jeong","Jeong_avg","jeong_avg1", "jeong_avg2", "jeong_avg3", "jeong_avg4", "jeong_avg5","jeong_avg6", "jeong_avg76", "jeong_avg8","jeong_avg9", "jeong_avg92", "jeong_avg95"]
-# enabled_models = [ "Ideal","Jeong","DMR","αβ-matrix","CrossSim1","CrossSim2", "CrossSim3", "CrossSim4", "CrossSim5", "CrossSim6", "CrossSim7", "CrossSim8", "Memtorch", "NgSpice"]
+enabled_models = [ "Ideal","Jeong", "αβ-matrix"]
+# enabled_models = [ "Ideal","Jeong","Jeong_avg","jeong_avg1", "jeong_avg2", "jeong_avg3", "jeong_avg4", "jeong_avg5","jeong_avg6", "jeong_avg76", "jeong_avg8","jeong_avg9", "jeong_avg92", "jeong_avg95"]
+enabled_models = [ "Ideal","Jeong","DMR","αβ-matrix","CrossSim1","CrossSim2", "CrossSim3", "CrossSim4", "CrossSim5", "CrossSim6", "CrossSim7", "CrossSim8", "Memtorch", "NgSpice"]
 # enabled_models = [model.name for model in Models]
 
-reference_model =  "CrossSim7"
+reference_model =  "NgSpice"
 
 # Low resistance proggramming value
 R_lrs = 1000
 Rhrs_percentage=50
 # parasitic resistance value
 parasiticResistance = np.arange(0.1, 5.1, 0.1)
-parasiticResistance = np.array([2])
+parasiticResistance = np.array([5])
 
 # Memory window (ratio between Hrs and Lrs)
 memoryWindow = np.arange(5, 101, 2)
@@ -245,10 +245,10 @@ for m in range(memorySize):
                     else:
                         # Call the numpy function
                         # NonLinear_params needed only for NgSpiceNonLinear as shown in original code
-                        NonLinear_params = {'X': X[z,m,v], 'S': S[z,m,v]} if model.name == 'NgSpiceNonLinear' else {'R_lrs': R_lrs, 'MW':memoryWindow[m]}
+                        Extra_params = {'X': X[z,m,v], 'S': S[z,m,v]} if model.name == 'NgSpiceNonLinear' else {'R_lrs': R_lrs, 'MW':memoryWindow[m]}
                         
                         start_time = time.perf_counter()
-                        v_drop, out_curr = model.calculate(R[z, m, v], parasiticResistance[z], Potential, **NonLinear_params)
+                        v_drop, out_curr = model.calculate(R[z, m, v], parasiticResistance[z], Potential, **Extra_params)
                         end_time = time.perf_counter()
                         
                         voltage_drops[:, :, z, m, model_idx] = v_drop

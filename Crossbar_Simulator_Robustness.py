@@ -2,6 +2,10 @@ import os
 import random
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.lines as mlines
+import matplotlib.patches as mpatches
+import matplotlib.colors as mcolors
+import textwrap
 import time
 import datetime
 import pytz
@@ -17,8 +21,8 @@ from CrossbarModels.Crossbar_Models import *
 
 # Models initialization
 Models = [
-    JeongModel("Jeong"),
-    JeongModel_avg("Jeong_avg"),
+    JeongModel("Jeong1"),
+    JeongModel_avg("Jeong"),
     JeongModel_avgv2("Jeong_torch"),
     IdealModel("Ideal"),
     DMRModel("DMR_old"),
@@ -44,7 +48,7 @@ Models = [
 ]
 
 # Enabled models
-enabled_models = ["Ideal", "Jeong_avg", "DMR", "αβ-matrix"]
+enabled_models = ["Ideal", "Jeong", "DMR", "αβ-matrix"]
 reference_model = "CrossSim"
 enabled_models.append(reference_model)
 
@@ -57,15 +61,15 @@ work_point_robustness = False  # Toggle between modes
 
 
 # Crossbar dimensions sweep
-array_size = np.arange(16, 43, 16)
+array_size = np.arange(8, 65, 8)
 # Sparsity of the matrix
 Rhrs_percentage = np.arange(10, 100, 10)
 # Parasitic resistance
 parasiticResistance = np.arange(0.1, 5, 0.5)
 # Memory window (ratio Hrs/Lrs)
-memoryWindow = np.arange(20, 100, 10)
+memoryWindow = np.arange(10, 100, 10)
 # Number of different variability instances
-variabilitySize = 5
+variabilitySize = 10
 
 # Low resistance programming value
 R_lrs = 1000
@@ -220,6 +224,320 @@ folder = f"Results/{end.year}{end.month}{end.day}_{end.hour}_{end.minute}_ArrayS
 if not os.path.exists(folder):
     os.makedirs(folder)
 
+
+
+
+###############################################################################
+#                         SPIDER PLOT & ROBUSTNESS CODE                       #
+###############################################################################
+####################### SPIDER PLOT FUNCTION ##############################
+
+def find_nearest_index(array, value):
+    """Return index of array element closest to 'value'."""
+    arr_np = np.array(array)
+    return np.abs(arr_np - value).argmin()
+
+def plot_spider_chart(base_metrics,
+                      robustness_metrics,
+                      enabled_models,
+                      model_colors,
+                      markers,
+                      show_first_model=False,
+                      reference_model=None,
+                      param_dict=None,
+                      is_work_point=False,
+                      save_suffix="",
+                      folder="Results"):
+
+
+    ######################################################################
+    # 1) MERGE METRICS + RENAME
+    all_metrics = {}
+
+    # Add remaining base metrics
+    for k, v in base_metrics.items():
+        if k not in all_metrics:
+            all_metrics[k] = v
+
+    # Add robustness metrics
+    for k, v in robustness_metrics.items():
+        all_metrics[k] = v
+
+    # Filter out invalid (NaN/Inf) arrays
+    valid_metrics = {
+        k: v for k, v in all_metrics.items()
+        if (v is not None) and np.all(np.isfinite(v))
+    }
+    if len(valid_metrics) == 0:
+        print("No valid metrics to plot. Exiting radar.")
+        return
+
+    labels = list(valid_metrics.keys())                # e.g. ["Simulation Speed", "Current Accuracy", ...]
+    metrics = np.array(list(valid_metrics.values()))   # shape => (N, M) => N metrics x M models
+    num_metrics = len(labels)
+    num_models = metrics.shape[1]
+
+    if num_metrics < 2:
+        print("Radar chart requires at least 2 metrics. Exiting.")
+        return
+
+    ######################################################################
+    # 2) NORMALIZE DATA [0..1]
+    if show_first_model:
+        max_vals = metrics.max(axis=1, keepdims=True) + 1e-12
+    else:
+        if num_models > 1:
+            max_vals = metrics[:, 1:].max(axis=1, keepdims=True) + 1e-12
+        else:
+            max_vals = metrics.max(axis=1, keepdims=True) + 1e-12
+
+    metrics_scaled = metrics / max_vals
+
+    ######################################################################
+    # 3) RADAR PLOT SETUP
+    angles_base = [n / float(num_metrics) * 2 * np.pi for n in range(num_metrics)]
+    angles_poly = angles_base + angles_base[:1]
+
+    fig, ax = plt.subplots(figsize=(6, 4), subplot_kw={'polar': True})
+    ax.set_facecolor('#f9f9f9')
+    ax.spines['polar'].set_visible(False)
+
+    ax.set_theta_offset(np.pi / 2)
+    ax.set_theta_direction(-1)
+
+    # Hide default radial ticks
+    ax.set_yticks([])
+
+    ax.grid(color='gray', linestyle='--', linewidth=0.5, alpha=0.5)
+
+    # Set radial ticks as percentages
+    radial_ticks = [0.2, 0.4, 0.6, 0.8, 1.0]
+    radial_tick_labels = [f"{int(rt * 100)}%" for rt in radial_ticks]
+    lines, lbls = ax.set_rgrids(
+        radial_ticks,
+        labels=radial_tick_labels,
+        angle=0,
+        color='gray',
+        alpha=0.3
+    )
+    # Extend to 105%
+    ax.set_ylim(0, 1.05)
+    for lbl in lbls:
+        lbl.set_fontsize(11)
+
+    ######################################################################
+    # 4) METRIC LABELS AROUND THE CIRCLE
+    def two_line_label(text, width=12):
+        wrapped = textwrap.wrap(text, width=width)
+        if len(wrapped) <= 3:
+            return "\n".join(wrapped)
+        else:
+            # Combine all lines beyond the 2nd index into a single third line
+            return wrapped[0] + "\n" + wrapped[1] + "\n" + " ".join(wrapped[2:])
+        
+    wrapped_labels = [two_line_label(lbl, width=12) for lbl in labels]
+
+    ax.set_xticks(angles_base)
+    ax.set_xticklabels(wrapped_labels, fontsize=11)
+    # Increase distance of labels from the circle
+    ax.tick_params(axis='x', pad=15)
+
+    ######################################################################
+    # 5) PLOT EACH MODEL’S POLYGON
+    legend_handles = []
+    for i, model_name in enumerate(enabled_models):
+        # Skip first model if user says so
+        if i == 0 and not show_first_model:
+            continue
+        # Skip reference model if needed
+        if reference_model and model_name == reference_model:
+            continue
+        if i >= num_models:
+            break
+
+        vals = metrics_scaled[:, i].tolist()
+        vals_poly = vals + vals[:1]
+
+        color = model_colors[i]
+        marker_style = markers[i % len(markers)]
+
+        ax.plot(
+            angles_poly, vals_poly,
+            label=model_name,
+            color=color,
+            linewidth=2,
+            marker=marker_style,
+            markersize=6
+            # No markeredgecolor for no white border
+        )
+        ax.fill(angles_poly, vals_poly, color=color, alpha=0.25)
+
+        legend_line = mlines.Line2D(
+            [], [], color=color,
+            marker=marker_style,
+            markersize=6,
+            linewidth=2,
+            label=model_name
+        )
+        legend_handles.append(legend_line)
+
+    ######################################################################
+    # 6) LEGEND + OPTIONAL BOX
+    ax.legend(
+        handles=legend_handles,
+        loc='upper right',
+        bbox_to_anchor=(1.7, 1.0),  # Move legend slightly to the right
+        title="Models",
+        fontsize=11,
+        title_fontsize=11
+    )
+
+    if is_work_point and param_dict is not None:
+        info_str = "Work Point:\n"
+        for k, v in param_dict.items():
+            info_str += f"  {k}: {v}\n"
+        plt.gcf().text(
+            0.02, 0.95, info_str,
+            fontsize=9,
+            va='bottom',
+            ha='right',
+            bbox=dict(boxstyle="round,pad=0.4", facecolor="white", alpha=0.8)
+        )
+
+    # plt.title(f"Model Performance Radar {save_suffix}", y=1.08, fontsize=14)
+
+    plt.tight_layout()
+    plt.savefig(folder + f'/Figure_Spider_plot{save_suffix}.png', dpi=300)
+    plt.show()
+
+
+
+####################### MAIN SPIDER PLOT LOGIC ##############################
+
+
+if work_point_robustness:
+    ########## INTERACTIVE WORK POINT MODE ##########
+    while True:
+        print("\nEnter parameter values (or 'q' to quit):")
+        
+        # Get user inputs
+        inputs = {}
+        try:
+            inputs['array_size'] = float(input(f"Array size ({array_size.tolist()}): "))
+            inputs['parasitic'] = float(input(f"Parasitic R ({parasiticResistance.tolist()}): "))
+            inputs['memory_window'] = float(input(f"Memory window ({memoryWindow.tolist()}): "))
+            inputs['variability'] = float(input(f"Variability index (0-{variabilitySize-1}): "))
+            inputs['hrs_percent'] = float(input(f"HRS % ({Rhrs_percentage.tolist()}): "))
+        except (ValueError, KeyboardInterrupt):
+            break
+            
+        # Find nearest indices
+        indices = {
+            'd0': find_nearest_index(array_size, inputs['array_size']),
+            'd1': find_nearest_index(parasiticResistance, inputs['parasitic']),
+            'd2': find_nearest_index(memoryWindow, inputs['memory_window']),
+            'd3': int(np.clip(inputs['variability'], 0, variabilitySize-1)),
+            'd4': find_nearest_index(Rhrs_percentage, inputs['hrs_percent'])
+        }
+
+        ########## Compute Metrics at Work Point ##########
+        # Base metrics
+        current_error = Current_error[indices['d0'], indices['d1'], indices['d2'], 
+                                      indices['d3'], indices['d4'], :]
+        voltage_error = Voltage_error[indices['d0'], indices['d1'], indices['d2'],
+                                      indices['d3'], indices['d4'], :]
+        sim_times = simulation_times[:, indices['d0']]
+        
+        base_metrics = {
+            'Current Accuracy': 1/(current_error[:-1] + 1e-12),
+            # 'Voltage Accuracy': 1/(voltage_error[:-1] + 1e-12),
+            'Speed': 1/(sim_times[:-1] + 1e-12)
+        }
+
+        ########## Compute Robustness Metrics ##########
+        robustness_metrics = {}
+        param_slices = {
+            'Array Size': Current_error[:, indices['d1'], indices['d2'], 
+                                       indices['d3'], indices['d4'], :],
+            'Parasitic Resistance': Current_error[indices['d0'], :, indices['d2'], 
+                                        indices['d3'], indices['d4'], :],
+            'Memory Window': Current_error[indices['d0'], indices['d1'], :, 
+                                          indices['d3'], indices['d4'], :],
+            'Variability': Current_error[indices['d0'], indices['d1'], indices['d2'], 
+                                        :, indices['d4'], :],
+            'Sparsity': Current_error[indices['d0'], indices['d1'], indices['d2'], 
+                                  indices['d3'], :, :]
+        }
+        
+        for param_name, slice_data in param_slices.items():
+            robustness = 1/(np.std(slice_data, axis=0) + 1e-12)[:-1]  # Exclude reference
+            robustness_metrics[f"{param_name} Robustness"] = robustness
+
+        ########## Generate Title Suffix ##########
+        title_suffix = (f"_AS{int(inputs['array_size'])}_PR{inputs['parasitic']:.1f}_"
+                      f"MW{int(inputs['memory_window'])}_VAR{int(inputs['variability'])}_"
+                      f"HRS{int(inputs['hrs_percent'])}%")
+
+        plot_spider_chart(
+            base_metrics=base_metrics,
+            robustness_metrics=robustness_metrics,
+            enabled_models=enabled_models,
+            model_colors=model_colors,
+            markers=markers,
+            show_first_model=show_first_model,
+            reference_model=reference_model,
+            param_dict=inputs,
+            is_work_point=True,
+            save_suffix=title_suffix,
+            folder=folder,
+        )
+
+else:
+    ########## AVERAGED METRICS MODE ##########
+    # Compute base metrics
+    current_error_avg = np.mean(Current_error, axis=(0,1,2,3,4))
+    voltage_error_avg = np.mean(Voltage_error, axis=(0,1,2,3,4))
+    total_sim_times = np.sum(simulation_times, axis=1)
+    
+    base_metrics = {
+        'Current Accuracy': 1/(current_error_avg[:-1] + 1e-12),
+        # 'Voltage Accuracy': 1/(voltage_error_avg[:-1] + 1e-12),
+        'Simulation Speed': 1/(total_sim_times[:-1] + 1e-12)
+    }
+
+    ########## Compute Robustness Metrics ##########
+    robustness_metrics = {}
+    param_dims = {
+        'Array Size': 0,
+        'Parasitic Resistance': 1,
+        'Memory Window': 2,
+        'Variability': 3,
+        'Sparsity': 4
+    }
+    
+    for param_name, dim in param_dims.items():
+        std_dev = np.std(Current_error, axis=dim)
+        robustness = 1/(np.mean(std_dev, axis=tuple(range(4))) + 1e-12)[:-1]
+        robustness_metrics[f"{param_name} Robustness"] = robustness
+
+    ########## Plot ##########
+    plot_spider_chart(
+    base_metrics=base_metrics,
+    robustness_metrics=robustness_metrics,
+    enabled_models=enabled_models,
+    model_colors=model_colors,
+    markers=markers,
+    show_first_model=show_first_model,
+    reference_model=reference_model,
+    is_work_point=False,
+    save_suffix="_AverageMetrics",
+    folder=folder,
+    )
+
+
+
+
+
 ###################### 1) Processing Time Plot ########################
 ideal_index = enabled_models.index("Ideal")
 plot_models = [model for i, model in enumerate(enabled_models) if i != ideal_index]
@@ -245,14 +563,13 @@ plt.grid(True, which="both", linestyle='--', linewidth=0.5)
 plt.savefig(folder + '/Figure_SimulationTimes_vs_ArraySize.png')
 plt.show()
 
+
+
+
+    
 ###############################################################################
 #                                3D PLOTTING                                  #
 ###############################################################################
-import numpy as np
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-import matplotlib.patches as mpatches
-import matplotlib.colors as mcolors
 
 # Helper functions (repeated here for convenience):
 def create_meshgrid_for_3d(x_len, y_len):
@@ -340,7 +657,6 @@ dim_labels_dict = {
 
 ###############################################################################
 # Define each 3D plot configuration in a list of dicts
-###############################################################################
 plot_configs = [
     {
         'title'   : "3D_Error_ArraySize_vs_Parasitic",
@@ -386,7 +702,6 @@ plot_configs = [
 
 ###############################################################################
 # Main Loop: Generate each 3D plot using the above configurations
-###############################################################################
 for config in plot_configs:
     # Prepare data
     Z_data = config['Z_data']  # shape -> (Nx, Ny, #models)
@@ -446,352 +761,6 @@ for config in plot_configs:
     plt.savefig(save_name, dpi=300, bbox_inches='tight')
     plt.show()
 
-
-
-
-
-
-###############################################################################
-#                         SPIDER PLOT & ROBUSTNESS CODE                       #
-###############################################################################
-####################### SPIDER PLOT FUNCTION ##############################
-
-def find_nearest_index(array, value):
-    """Return index of array element closest to 'value'."""
-    arr_np = np.array(array)
-    return np.abs(arr_np - value).argmin()
-
-def plot_spider_chart(base_metrics,
-                      robustness_metrics,
-                      enabled_models,
-                      model_colors,
-                      markers,
-                      show_first_model=False,
-                      reference_model=None,
-                      param_dict=None,
-                      is_work_point=False,
-                      save_suffix="",
-                      folder="Results"):
-
-    import textwrap
-    import matplotlib.lines as mlines
-    import matplotlib.colors as mcolors
-    import numpy as np
-    import matplotlib.pyplot as plt
-
-    ######################################################################
-    # 0) KEY RENAME MAP
-    ######################################################################
-    rename_map = {
-        "Speed": "Simulation Speed",
-        "Memory Window": "Memory window Robustness",
-        "Memory window": "Memory window Robustness",
-        "Parasitic R": "Parasitic Resistance Robustness",
-        "Parasitic Resistance": "Parasitic Resistance Robustness",
-        "Parasitic R Robustness": "Parasitic Resistance Robustness",
-        "HRS % Robustness": "Sparsity Robustness",
-    }
-
-    def rename_if_needed(metric_key):
-        return rename_map[metric_key] if metric_key in rename_map else metric_key
-
-    ######################################################################
-    # 1) MERGE METRICS + RENAME
-    ######################################################################
-    mandatory_order = ["Simulation Speed", "Current Accuracy", "Voltage Accuracy"]
-    all_metrics = {}
-
-    # Insert mandatory metrics first (renaming if needed)
-    for key in ["Speed", "Current Accuracy", "Voltage Accuracy"]:
-        if key in base_metrics:
-            new_key = rename_if_needed(key)
-            all_metrics[new_key] = base_metrics[key]
-
-    # Add remaining base metrics
-    for k, v in base_metrics.items():
-        new_k = rename_if_needed(k)
-        if new_k not in all_metrics:
-            all_metrics[new_k] = v
-
-    # Add robustness metrics
-    for k, v in robustness_metrics.items():
-        new_k = rename_if_needed(k)
-        all_metrics[new_k] = v
-
-    # Filter out invalid (NaN/Inf) arrays
-    valid_metrics = {
-        k: v for k, v in all_metrics.items()
-        if (v is not None) and np.all(np.isfinite(v))
-    }
-    if len(valid_metrics) == 0:
-        print("No valid metrics to plot. Exiting radar.")
-        return
-
-    labels = list(valid_metrics.keys())                # e.g. ["Simulation Speed", "Current Accuracy", ...]
-    metrics = np.array(list(valid_metrics.values()))   # shape => (N, M) => N metrics x M models
-    num_metrics = len(labels)
-    num_models = metrics.shape[1]
-
-    if num_metrics < 2:
-        print("Radar chart requires at least 2 metrics. Exiting.")
-        return
-
-    ######################################################################
-    # 2) NORMALIZE DATA [0..1]
-    ######################################################################
-    if show_first_model:
-        max_vals = metrics.max(axis=1, keepdims=True) + 1e-12
-    else:
-        if num_models > 1:
-            max_vals = metrics[:, 1:].max(axis=1, keepdims=True) + 1e-12
-        else:
-            max_vals = metrics.max(axis=1, keepdims=True) + 1e-12
-
-    metrics_scaled = metrics / max_vals
-
-    ######################################################################
-    # 3) RADAR PLOT SETUP
-    ######################################################################
-    angles_base = [n / float(num_metrics) * 2 * np.pi for n in range(num_metrics)]
-    angles_poly = angles_base + angles_base[:1]
-
-    fig, ax = plt.subplots(figsize=(6, 4), subplot_kw={'polar': True})
-    ax.set_facecolor('#f9f9f9')
-    ax.spines['polar'].set_visible(False)
-
-    ax.set_theta_offset(np.pi / 2)
-    ax.set_theta_direction(-1)
-
-    # Hide default radial ticks
-    ax.set_yticks([])
-
-    ax.grid(color='gray', linestyle='--', linewidth=0.5, alpha=0.5)
-
-    # Set radial ticks as percentages
-    radial_ticks = [0.2, 0.4, 0.6, 0.8, 1.0]
-    radial_tick_labels = [f"{int(rt * 100)}%" for rt in radial_ticks]
-    lines, lbls = ax.set_rgrids(
-        radial_ticks,
-        labels=radial_tick_labels,
-        angle=0,
-        color='gray',
-        alpha=0.3
-    )
-    # Extend to 105%
-    ax.set_ylim(0, 1.05)
-    for lbl in lbls:
-        lbl.set_fontsize(11)
-
-    ######################################################################
-    # 4) METRIC LABELS AROUND THE CIRCLE
-    ######################################################################
-    def two_line_label(text, width=12):
-        wrapped = textwrap.wrap(text, width=width)
-        return "\n".join(wrapped[:2])  # up to 2 lines
-
-    wrapped_labels = [two_line_label(lbl, width=12) for lbl in labels]
-
-    ax.set_xticks(angles_base)
-    ax.set_xticklabels(wrapped_labels, fontsize=11)
-    # Increase distance of labels from the circle
-    ax.tick_params(axis='x', pad=15)
-
-    ######################################################################
-    # 5) PLOT EACH MODEL’S POLYGON
-    ######################################################################
-    legend_handles = []
-    for i, model_name in enumerate(enabled_models):
-        # Skip first model if user says so
-        if i == 0 and not show_first_model:
-            continue
-        # Skip reference model if needed
-        if reference_model and model_name == reference_model:
-            continue
-        if i >= num_models:
-            break
-
-        vals = metrics_scaled[:, i].tolist()
-        vals_poly = vals + vals[:1]
-
-        color = model_colors[i]
-        marker_style = markers[i % len(markers)]
-
-        ax.plot(
-            angles_poly, vals_poly,
-            label=model_name,
-            color=color,
-            linewidth=2,
-            marker=marker_style,
-            markersize=6
-            # No markeredgecolor for no white border
-        )
-        ax.fill(angles_poly, vals_poly, color=color, alpha=0.25)
-
-        legend_line = mlines.Line2D(
-            [], [], color=color,
-            marker=marker_style,
-            markersize=6,
-            linewidth=2,
-            label=model_name
-        )
-        legend_handles.append(legend_line)
-
-    ######################################################################
-    # 6) LEGEND + OPTIONAL BOX
-    ######################################################################
-    ax.legend(
-        handles=legend_handles,
-        loc='upper right',
-        bbox_to_anchor=(1.6, 1.0),
-        title="Models",
-        fontsize=11,
-        title_fontsize=11
-    )
-
-    if is_work_point and param_dict is not None:
-        info_str = "Chosen Work Point:\n"
-        for k, v in param_dict.items():
-            info_str += f"  {k}: {v}\n"
-        plt.gcf().text(
-            0.02, 0.95, info_str,
-            fontsize=9,
-            va='top',
-            ha='left',
-            bbox=dict(boxstyle="round,pad=0.4", facecolor="white", alpha=0.8)
-        )
-
-    # Title is commented out as requested
-    # plt.title(f"Model Performance Radar {save_suffix}", y=1.08, fontsize=14)
-
-    plt.tight_layout()
-    plt.savefig(folder + f'/Figure_Spider_plot{save_suffix}.png', dpi=300)
-    plt.show()
-
-
-
-####################### MAIN SPIDER PLOT LOGIC ##############################
-
-
-if work_point_robustness:
-    ########## INTERACTIVE WORK POINT MODE ##########
-    while True:
-        print("\nEnter parameter values (or 'q' to quit):")
-        
-        # Get user inputs
-        inputs = {}
-        try:
-            inputs['array_size'] = float(input(f"Array size ({array_size.tolist()}): "))
-            inputs['parasitic'] = float(input(f"Parasitic R ({parasiticResistance.tolist()}): "))
-            inputs['memory_window'] = float(input(f"Memory window ({memoryWindow.tolist()}): "))
-            inputs['variability'] = float(input(f"Variability index (0-{variabilitySize-1}): "))
-            inputs['hrs_percent'] = float(input(f"HRS % ({Rhrs_percentage.tolist()}): "))
-        except (ValueError, KeyboardInterrupt):
-            break
-            
-        # Find nearest indices
-        indices = {
-            'd0': find_nearest_index(array_size, inputs['array_size']),
-            'd1': find_nearest_index(parasiticResistance, inputs['parasitic']),
-            'd2': find_nearest_index(memoryWindow, inputs['memory_window']),
-            'd3': int(np.clip(inputs['variability'], 0, variabilitySize-1)),
-            'd4': find_nearest_index(Rhrs_percentage, inputs['hrs_percent'])
-        }
-
-        ########## Compute Metrics at Work Point ##########
-        # Base metrics
-        current_error = Current_error[indices['d0'], indices['d1'], indices['d2'], 
-                                      indices['d3'], indices['d4'], :]
-        voltage_error = Voltage_error[indices['d0'], indices['d1'], indices['d2'],
-                                      indices['d3'], indices['d4'], :]
-        sim_times = simulation_times[:, indices['d0']]
-        
-        base_metrics = {
-            'Current Accuracy': 1/(current_error[:-1] + 1e-12),
-            'Voltage Accuracy': 1/(voltage_error[:-1] + 1e-12),
-            'Speed': 1/(sim_times[:-1] + 1e-12)
-        }
-
-        ########## Compute Robustness Metrics ##########
-        robustness_metrics = {}
-        param_slices = {
-            'Array Size': Current_error[:, indices['d1'], indices['d2'], 
-                                       indices['d3'], indices['d4'], :],
-            'Parasitic R': Current_error[indices['d0'], :, indices['d2'], 
-                                        indices['d3'], indices['d4'], :],
-            'Memory Window': Current_error[indices['d0'], indices['d1'], :, 
-                                          indices['d3'], indices['d4'], :],
-            'Variability': Current_error[indices['d0'], indices['d1'], indices['d2'], 
-                                        :, indices['d4'], :],
-            'HRS %': Current_error[indices['d0'], indices['d1'], indices['d2'], 
-                                  indices['d3'], :, :]
-        }
-        
-        for param_name, slice_data in param_slices.items():
-            robustness = 1/(np.std(slice_data, axis=0) + 1e-12)[:-1]  # Exclude reference
-            robustness_metrics[f"{param_name} Robustness"] = robustness
-
-        ########## Generate Title Suffix ##########
-        title_suffix = (f"_AS{int(inputs['array_size'])}_PR{inputs['parasitic']:.1f}_"
-                      f"MW{int(inputs['memory_window'])}_VAR{int(inputs['variability'])}_"
-                      f"HRS{int(inputs['hrs_percent'])}%")
-
-        plot_spider_chart(
-            base_metrics=base_metrics,
-            robustness_metrics=robustness_metrics,
-            enabled_models=enabled_models,
-            model_colors=model_colors,
-            markers=markers,
-            show_first_model=show_first_model,
-            reference_model=reference_model,
-            param_dict=inputs,
-            is_work_point=True,
-            save_suffix=title_suffix,
-            folder=folder,
-        )
-
-else:
-    ########## AVERAGED METRICS MODE ##########
-    # Compute base metrics
-    current_error_avg = np.mean(Current_error, axis=(0,1,2,3,4))
-    voltage_error_avg = np.mean(Voltage_error, axis=(0,1,2,3,4))
-    total_sim_times = np.sum(simulation_times, axis=1)
-    
-    base_metrics = {
-        'Current Accuracy': 1/(current_error_avg[:-1] + 1e-12),
-        'Voltage Accuracy': 1/(voltage_error_avg[:-1] + 1e-12),
-        'Speed': 1/(total_sim_times[:-1] + 1e-12)
-    }
-
-    ########## Compute Robustness Metrics ##########
-    robustness_metrics = {}
-    param_dims = {
-        'Array Size': 0,
-        'Parasitic R': 1,
-        'Memory Window': 2,
-        'Variability': 3,
-        'HRS %': 4
-    }
-    
-    for param_name, dim in param_dims.items():
-        std_dev = np.std(Current_error, axis=dim)
-        robustness = 1/(np.mean(std_dev, axis=tuple(range(4))) + 1e-12)[:-1]
-        robustness_metrics[f"{param_name} Robustness"] = robustness
-
-    ########## Plot ##########
-    plot_spider_chart(
-    base_metrics=base_metrics,
-    robustness_metrics=robustness_metrics,
-    enabled_models=enabled_models,
-    model_colors=model_colors,
-    markers=markers,
-    show_first_model=show_first_model,
-    reference_model=reference_model,
-    is_work_point=False,
-    save_suffix="_AverageMetrics",
-    folder=folder,
-    )
-
-    
 
 
 ###################### 3) Error vs Different Data #####################
