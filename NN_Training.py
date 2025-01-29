@@ -45,7 +45,7 @@ print(f"Using device: {device}")
 hiddenLayer = 128
 batch_size = 128
 learning_rate = 0.002
-epochs = 10
+epochs = 20
 save_checkpoint = False
 Fix_positive_weights = False
 early_stop_acc = 99

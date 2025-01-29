@@ -1,0 +1,14 @@
+Training Log
+Model: crosssim_model
+Parasitic Resistance: 2.0
+R_lrs: 1000
+R_hrs: 40000
+Max Array Size: 32
+Hidden Layer Size: 128
+Batch Size: 128
+Learning Rate: 0.002
+Epochs: 20
+Early Stop Accuracy: 99%
+Final Training Accuracy: 99.01%
+Test Accuracy: 96.91%
+Total Training Time (s): 21615.8688
