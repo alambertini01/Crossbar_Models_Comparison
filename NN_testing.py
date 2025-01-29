@@ -23,8 +23,8 @@ if __name__ == '__main__':
     # Primary fixed parameters
     R_lrs = 1e3
     
-    parasitic_resistances = torch.arange(1, 3, 0.2).tolist()
-    max_array_size = 128
+    parasitic_resistances = torch.arange(1, 3, 0.5).tolist()
+    max_array_size = 64
     model_functions = [ crosssim_model]
     bias_correction = False
     debug_plot = False
@@ -35,7 +35,7 @@ if __name__ == '__main__':
     test_samples = 300
 
     # Parameters to potentially sweep
-    R_hrs_values = torch.linspace(20000, 60000, steps=10).tolist()
+    R_hrs_values = torch.linspace(20000, 60000, steps=4).tolist()
     # R_hrs_values = 40000
     bits_values = 0
 
@@ -242,29 +242,55 @@ if __name__ == '__main__':
 
     # *************** Plotting ***************
 
+###############################################################################
+# 3D Surface Plot for Swept Parameter
+###############################################################################
     for model_name, acc_matrix in custom_accuracies.items():
         if n_pv > 1:
-            # Create a 3D surface plot for each model
-            X, Y = np.meshgrid(param_values, parasitic_resistances)
+            # Determine if we are sweeping R_hrs or bits
+            if sweeping_param == 'R_hrs':
+                # Convert R_hrs values to "Memory window" ratio
+                x_values = [val / R_lrs for val in param_values]
+                x_label = "Memory window"
+            else:
+                x_values = param_values
+                x_label = "bits"
+            # Create the mesh for 3D plotting
+            X, Y = np.meshgrid(x_values, parasitic_resistances)
             Z = acc_matrix
-            fig = plt.figure(figsize=(12, 8))
+            # Create a new figure
+            fig = plt.figure(figsize=(10, 8))
             ax = fig.add_subplot(111, projection='3d')
-            # Plot the surface
-            surf = ax.plot_surface(X, Y, Z, cmap='viridis', edgecolor='none', alpha=0.8)
-            # Add a color bar which maps values to colors
-            cbar = fig.colorbar(surf, ax=ax, shrink=0.5, aspect=10)
-            cbar.set_label('Accuracy (%)', fontsize=12)
-            # Set labels
-            ax.set_xlabel(sweeping_param, fontsize=12, labelpad=10)
-            ax.set_ylabel('Parasitic Resistance', fontsize=12, labelpad=10)
-            ax.set_zlabel('Accuracy (%)', fontsize=12, labelpad=10)
-            # Set title
-            ax.set_title(f'Accuracy Surface Plot - {model_name}', fontsize=14, pad=20)
-            # Improve layout and appearance
-            ax.view_init(elev=30, azim=225)  # Adjust the viewing angle for better visualization
+            # Plot the surface with a chosen colormap
+            surf = ax.plot_surface(
+                X, 
+                Y, 
+                Z, 
+                cmap='plasma', 
+                edgecolor='none', 
+                alpha=0.8
+            )
+            # Add color bar with bigger label
+            cbar = fig.colorbar(surf, ax=ax, pad=0.1, shrink=0.6)
+            cbar.set_label("Accuracy (%)", fontsize=16)
+            # Set axis labels and their font sizes
+            ax.set_xlabel(x_label, fontsize=16, labelpad=10)
+            ax.set_ylabel(r"Parasitic resistance ($\Omega$)", fontsize=16, labelpad=10)
+            ax.set_zlabel("Accuracy (%)", fontsize=16, labelpad=10)
+            # Make tick labels a bit bigger
+            ax.tick_params(axis='both', which='major', labelsize=12)
+            # Set a title
+            ax.set_title(f"Accuracy 3D Surface - {model_name}", fontsize=18, pad=20)
+            # Adjust the view angle
+            ax.view_init(elev=30, azim=225)
+            # Tight layout for better spacing
             plt.tight_layout()
             # Save the figure
-            plt.savefig(os.path.join(results_folder, f"Accuracy_Surface_{model_name}_sweep_{sweeping_param}.png"), dpi=300)
+            plt.savefig(
+                os.path.join(results_folder, 
+                f"Accuracy_Surface_{model_name}_sweep_{sweeping_param}.png"), 
+                dpi=300
+            )
             # Show the plot
             plt.show()
         else:
@@ -314,3 +340,4 @@ if __name__ == '__main__':
 
     print("All results saved in:", results_folder)
     print("Accuracy data saved in:", csv_file)
+    
