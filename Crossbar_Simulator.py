@@ -63,7 +63,7 @@ Models = [
     alpha_beta("alpha_beta_old"),
     alpha_beta_acc("αβ-matrix"),
     alpha_beta_acc("αβ-matrix_torch"),
-    CrossSimModel("CrossSim_ref"),
+    CrossSimModel("CrossSim"),
     CrossSimModel("CrossSim1",Verr_th=0.5),
     CrossSimModel("CrossSim2",Verr_th=1e-1),
     CrossSimModel("CrossSim3",Verr_th=1e-2),
@@ -92,21 +92,21 @@ new_model_functions = {
 }
 enabled_models = [ "Ideal","Jeong", "αβ-matrix"]
 # enabled_models = [ "Ideal","Jeong","Jeong_avg","jeong_avg1", "jeong_avg2", "jeong_avg3", "jeong_avg4", "jeong_avg5","jeong_avg6", "jeong_avg76", "jeong_avg8","jeong_avg9", "jeong_avg92", "jeong_avg95"]
-enabled_models = [ "Ideal","Jeong","DMR","αβ-matrix","CrossSim1","CrossSim2", "CrossSim3", "CrossSim4", "CrossSim5", "CrossSim6", "CrossSim7", "CrossSim8", "Memtorch", "NgSpice"]
+# enabled_models = [ "Ideal","Jeong","DMR","αβ-matrix","CrossSim1","CrossSim2", "CrossSim3", "CrossSim4", "CrossSim5", "CrossSim6", "CrossSim7", "CrossSim8", "Memtorch", "NgSpice"]
 # enabled_models = [model.name for model in Models]
 
-reference_model =  "NgSpice"
+reference_model =  "CrossSim"
 
 # Low resistance proggramming value
 R_lrs = 1000
 Rhrs_percentage=50
 # parasitic resistance value
 parasiticResistance = np.arange(0.1, 5.1, 0.1)
-parasiticResistance = np.array([5])
+# parasiticResistance = np.array([5])
 
 # Memory window (ratio between Hrs and Lrs)
 memoryWindow = np.arange(5, 101, 2)
-memoryWindow = np.array([40])
+# memoryWindow = np.array([40])
 
 # Input voltages parameters
 v_On_percentage = 100
@@ -117,7 +117,7 @@ Metric_type = 1
 
 # Variability parameters
 v_flag = 0
-v_size = 2
+v_size = 100
 
 
 ############################ INITIALIZATIONS ############################
@@ -612,8 +612,8 @@ if Winning_models_map:
                    extent=[memoryWindow[0], memoryWindow[-1], parasiticResistance[0], parasiticResistance[-1]],
                    interpolation="nearest")
     ax.set_xlabel("Memory Window", fontsize=16)
-    ax.set_ylabel("Parasitic Resistance", fontsize=16)
-    ax.set_title("Winning Models Map (Shaded by Error)", fontsize=18, pad=20)
+    ax.set_ylabel("Parasitic Resistance (Ω)", fontsize=16)
+    # ax.set_title("Winning Models Map (Shaded by Error)", fontsize=18, pad=20)
     ax.tick_params(labelsize=14)
     fig.subplots_adjust(bottom=0.3)
 
