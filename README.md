@@ -37,17 +37,13 @@ A comprehensive tool for modeling and analyzing parasitic effects in crossbar ar
   \- Robustness evaluations under varying crossbar parameters.  
 
 ### Hardware-Aware Training
-- **Neural Network Setup**  
-  \- Two-layer fully connected architecture for MNIST classification.  
-  \- Customizable hidden layer size.  
-  \- Linear conductance mapping for weights, with optional quantization schemes.  
-  \- Configurable positive-only weight constraints.  
-
-- **Hardware Modeling**  
-  \- Parasitic resistance incorporation into training, using parasitic models with automatic differentiation.  
+- **Memristive Neural Network Setup**  
+  \- Two-layer fully connected architecture for MNIST classification, with configurable hidden layer.  
   \- Flexible tile partitioning, linear mapping of weights to conductances and quantization.  
-  \- Weight, bias, and confusion matrix visualizations after training.
-  \- 2D and 3D accuracy plots for avaluation
+
+- **Training and Testing**  
+  \- Parasitic resistance incorporation into training, using parasitic models with automatic differentiation.  
+  \- Weights, biases, and confusion matrix visualizations after training. 2D and 3D accuracy plots for evaluation.
 
 ---
 
@@ -92,14 +88,14 @@ A comprehensive tool for modeling and analyzing parasitic effects in crossbar ar
 ```bash
 python Crossbar_Simulator.py
 ```
-- Ideal for in-depth current and voltage analysis on custom-sized rectangular arrays.  
-- Offers parameter tuning (resistance ratios, device variability, etc.).
+- Ideal for in-depth current and voltage analysis on custom-sized arrays.  
+- Offers detailed parameter tuning (resistance ratios, device variability, etc.).
 
 #### 1.2 Robustness Analysis
 ```bash
 python Crossbar_Simulator_Robustness.py
 ```
-- Runs extensive simulation sweeps across multiple parameters.  
+- Runs comprehensive simulation sweeps across multiple parameters.  
 - Generates robustness metrics (radar plots, 3D MSE plots).
 
 ### 2. Parasitic-Aware Neural Network
