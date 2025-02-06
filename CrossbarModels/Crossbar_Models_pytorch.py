@@ -108,105 +108,6 @@ def dmr_model(weight: torch.Tensor, x: torch.Tensor, parasiticResistance: float)
 
 
 
-def gamma_model(weight, x, parasiticResistance):
-    epsilon = 1e-8  # Small constant to prevent division by zero
-    input_size, output_size = weight.shape  # weight: (input_size, output_size)
-    batch_size = x.shape[0]  # x: (batch_size, input_size)
-    G = weight  # G: (input_size, output_size)
-    x_max = torch.max(x, dim=1, keepdim=True)[0].unsqueeze(2)  # x_max: (batch_size, 1, 1)
-    I = G.unsqueeze(0) * x_max  # I: (batch_size, input_size, output_size)
-    
-    # Calculate g_bit and g_word values
-    g_bit = g_word = 1 / parasiticResistance
-    g = g_bit
-    
-    # Compute average conductances per row and column
-    gAverageRow = G.mean(dim=1)  # (input_size,)
-    gAverageCol = G.mean(dim=0)  # (output_size,)
-    G_mean = G.mean()
-    
-    # Compute constants A, B, and X
-    A = (input_size - 2) / input_size
-    B = 2 / input_size
-    X = (input_size * (input_size - 1)) / 2 * G_mean
-    
-    # Calculate alpha_gm_0
-    indices = torch.arange(input_size, 0, -1, device=weight.device)
-    Summation_bit = torch.sum(indices * gAverageRow)
-    alpha_gm_0 = 1 / (1 + Summation_bit / g_bit + epsilon)  # Added epsilon
-    
-    # Calculate beta_gm_last
-    indices_col = torch.arange(1, output_size + 1, device=weight.device)
-    Summation_word = torch.sum(indices_col * gAverageCol)
-    beta_gm_last = 1 / (1 + Summation_word / g_word + epsilon)  # Added epsilon
-    
-    NIR1_n = alpha_gm_0 * beta_gm_last  # scalar
-    
-    # Initialize accumulation matrices
-    I_aacc1 = torch.zeros((batch_size, input_size, output_size), device=weight.device)
-    I_aacc2 = torch.zeros((batch_size, input_size, output_size), device=weight.device)
-    I_betaacc1 = torch.zeros((batch_size, input_size, output_size), device=weight.device)
-    I_betaacc2 = torch.zeros((batch_size, input_size, output_size), device=weight.device)
-    
-    # Accumulate currents
-    I_aacc1[:, 1:, :] = torch.cumsum(I[:, :-1, :], dim=1)
-    I_aacc2[:, 1:, :] = torch.cumsum(I_aacc1[:, 1:, :], dim=1)
-    I_betaacc1 = torch.cumsum(I.flip(dims=[2]), dim=2).flip(dims=[2])
-    I_betaacc2[:, :, :-1] = torch.cumsum(I_betaacc1[:, :, 1:].flip(dims=[2]), dim=2).flip(dims=[2])
-    
-    # Calculate gamma, gamma_a, and gamma_b
-    numerator_gamma = A * X * g * torch.sqrt(NIR1_n) + A * X**2 * torch.sqrt(NIR1_n)
-    denominator_gamma = g * (g - g * torch.sqrt(NIR1_n) + A * X - A * X * torch.sqrt(NIR1_n) - B * X * torch.sqrt(NIR1_n)) + epsilon  # Added epsilon
-    gamma = torch.clamp(numerator_gamma / denominator_gamma, min=0)  # gamma is scalar
-    
-    gamma_a = (
-        ((input_size - 1) / (input_size + 1)) * (g + (input_size * (input_size + 1) / 2) * G_mean) +
-        (2 / (input_size + 1)) * g * gamma
-    ) / (
-        g + ((input_size - 1) / (input_size + 1)) * (input_size * (input_size + 1) / 2) * G_mean + epsilon  # Added epsilon
-    )
-    
-    gamma_b = (
-        ((output_size - 1) / (output_size + 1)) * (g + (output_size * (output_size + 1) / 2) * G_mean) +
-        (2 / (output_size + 1)) * g * gamma
-    ) / (
-        g + ((output_size - 1) / (output_size + 1)) * (output_size * (output_size + 1) / 2) * G_mean + epsilon  # Added epsilon
-    )
-    
-    # Calculate alpha and beta
-    G0 = G[0, :].unsqueeze(0).unsqueeze(0)  # Shape: (1, 1, output_size)
-    G0_expanded = G0.expand(batch_size, input_size, output_size)  # Shape: (batch_size, input_size, output_size)
-    
-    # Expand I[:, 0, :] to match dimensions
-    I0 = I[:, 0, :].unsqueeze(1)  # Shape: (batch_size, 1, output_size)
-    I0_expanded = I0.expand(batch_size, input_size, output_size)
-    
-    # Calculate alpha_numerator and alpha_denominator
-    alpha_numerator = I0_expanded * g_bit * gamma + I_aacc2 * G0_expanded
-    alpha_denominator = I0_expanded * g_bit * gamma + I_aacc2[:, -1:, :] * G0[:, :, :] * gamma_a + epsilon  # Added epsilon
-    alpha_gm = alpha_numerator / alpha_denominator  # Shape: (batch_size, input_size, output_size)
-    
-    # Calculate beta_numerator and beta_denominator
-    G_last_col = G[:, -1].unsqueeze(0).unsqueeze(2)  # Shape: (1, input_size, 1)
-    G_last_col_expanded = G_last_col.expand(batch_size, input_size, output_size)
-    
-    I_last = I[:, :, -1].unsqueeze(2)  # Shape: (batch_size, input_size, 1)
-    I_last_expanded = I_last.expand(batch_size, input_size, output_size)
-    
-    beta_numerator = I_last_expanded * g_word * gamma + I_betaacc2 * G_last_col_expanded
-    beta_denominator = I_last_expanded * g_word * gamma + I_betaacc2[:, :, :1] * G_last_col * gamma_b + epsilon  # Added epsilon
-    beta_gm = beta_numerator / beta_denominator  # Shape: (batch_size, input_size, output_size)
-    
-    # Compute voltage drops and currents
-    V_a_matrix = x.unsqueeze(2).repeat(1, 1, output_size)
-    voltage_drops_gamma = alpha_gm * V_a_matrix * beta_gm  # Voltage drops across the array (not used)
-    
-    # Compute the current using broadcasting
-    current_gamma = torch.sum(voltage_drops_gamma * G.unsqueeze(0).repeat(batch_size, 1, 1), dim=1)  # Shape: (batch_size, output_size)
-    return current_gamma
-
-
-
 def alpha_beta_model(weight, x, parasiticResistance):
     """
     PyTorch adaptation of the alpha-beta model for batched inputs.
@@ -337,7 +238,7 @@ def alpha_beta_model(weight, x, parasiticResistance):
 
 # Memtorch solve_passive model
 # Uses memtorch_bindings to solve passive networks and obtain voltage drops and currents
-def solve_passive_model(weight, x, parasiticResistance):
+def Memtorch_model(weight, x, parasiticResistance):
     return memtorch_bindings.solve_passive(
         weight.double(),
         x.double(),

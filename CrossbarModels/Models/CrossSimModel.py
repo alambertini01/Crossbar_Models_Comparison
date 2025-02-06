@@ -76,8 +76,7 @@ def mvm_parasitics(vector, matrix, parasiticResistance, gamma, Verr_th):
     Niters = 0
 
     # Initial estimate of device currents
-    # Input seen at every element
-    dV0 = xp.tile(vector, (matrix.shape[0], 1))
+    dV0 = xp.tile(vector, (matrix.shape[0], 1)).astype(xp.float64)
     Ires = matrix * dV0
     dV = dV0.copy()
     
@@ -94,7 +93,7 @@ def mvm_parasitics(vector, matrix, parasiticResistance, gamma, Verr_th):
         # Calculate the error for the current estimate of memristor currents
         VerrMat = dV0 - Vpar - dV
 
-        # Evaluate overall error; if using SIMD, make sure only to count the cells that matter
+        # Evaluate overall error
         Verr = xp.max(xp.abs(VerrMat))
         if Verr < Verr_th:
             break
