@@ -60,12 +60,12 @@ A comprehensive tool for modeling and analyzing parasitic effects in crossbar ar
    ```
 
 2. **Create and Activate a Virtual Environment (Optional)**  
-   **Windows**:
+   *Windows*:
    ```bash
    python -m venv venv
    venv\Scripts\activate
    ```  
-   **macOS/Linux**:
+   *macOS/Linux*:
    ```bash
    python3 -m venv venv
    source venv/bin/activate
