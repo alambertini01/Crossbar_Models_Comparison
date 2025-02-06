@@ -19,32 +19,40 @@ from CrossbarModels.Crossbar_Models import *
 
 ############################ PARAMETERS ##############################
 
-# Models initialization
+# Initialize each model instance
 Models = [
-    JeongModel("Jeong1"),
+    JeongModel("Jeongv1"),
     JeongModel_avg("Jeong"),
-    JeongModel_avgv2("Jeong_torch"),
+    JeongModel_avg("jeong_avg76",k=0.76),
+    JeongModel_avg("jeong_avg8",k=0.8),
+    JeongModel_avg("jeong_avg9",k=0.9),
+    JeongModel_avg("jeong_avg92",k=0.92),
+    JeongModel_avg("jeong_avg95",k=0.95),
+    JeongModel_avg("Jeong_torch"),
     IdealModel("Ideal"),
     DMRModel("DMR_old"),
-    DMRModel_acc("DMR_v1"),
-    DMRModel_new("DMR"),
-    DMRModel_new("DMR_torch"),
-    GammaModel("Gamma_torch"),
-    GammaModel_acc("Gamma_acc_v1"),
-    GammaModel_acc_v2("γ"),
-    alpha_beta("alpha_beta_old"),
+    DMRModel_acc("DMR"),
+    DMRModel_acc("DMR_torch"),
+    alpha_beta("αβ-matrix_old"),
     alpha_beta_acc("αβ-matrix"),
+    alpha_beta_acc("αβ-matrix_torch"),
     CrossSimModel("CrossSim"),
-    CrossSimModel("CrossSim03", Verr_th=0.3, hide_convergence_msg=True),
-    CrossSimModel("CrossSim1", Verr_th=1e-1),
-    CrossSimModel("CrossSim2", Verr_th=1e-2),
-    CrossSimModel("CrossSim3", Verr_th=1e-3),
-    CrossSimModel("CrossSim7", Verr_th=1e-7),
+    CrossSimModel("CrossSim1",Verr_th=0.5),
+    CrossSimModel("CrossSim2",Verr_th=1e-1),
+    CrossSimModel("CrossSim3",Verr_th=1e-2),
+    CrossSimModel("CrossSim4",Verr_th=1e-3),
+    CrossSimModel("CrossSim5",Verr_th=1e-4),
+    CrossSimModel("CrossSim6",Verr_th=1e-5),
+    CrossSimModel("CrossSim7",Verr_th=1e-6),
+    CrossSimModel("CrossSim8",Verr_th=1e-7),
+    CrossSimModel("CrossSim9",Verr_th=1e-8),
+    CrossSimModel("CrossSim10",Verr_th=1e-9),
+    CrossSimModel("CrossSim_torch"),
     LTSpiceModel("LTSpice"),
     NgSpiceModel("NgSpice"),
     NgSpiceNonLinearModel("NgSpiceNonLinear"),
-    MemtorchModelCpp("Memtorch"),
-    MemtorchModelPython("Memtorch_python")
+    MemtorchModelCpp("Memtorch_float"),
+    MemtorchModelCpp_double("Memtorch"),
 ]
 
 # Enabled models
@@ -61,15 +69,15 @@ work_point_robustness = False  # Toggle between modes
 
 
 # Crossbar dimensions sweep
-array_size = np.arange(8, 65, 8)
+array_size = np.arange(100, 150, 10)
 # Sparsity of the matrix
 Rhrs_percentage = np.arange(10, 100, 10)
 # Parasitic resistance
 parasiticResistance = np.arange(0.1, 5, 0.5)
 # Memory window (ratio Hrs/Lrs)
-memoryWindow = np.arange(10, 100, 10)
+memoryWindow = np.arange(10, 100, 20)
 # Number of different variability instances
-variabilitySize = 10
+variabilitySize = 5
 
 # Low resistance programming value
 R_lrs = 1000
@@ -248,8 +256,6 @@ def plot_spider_chart(base_metrics,
                       is_work_point=False,
                       save_suffix="",
                       folder="Results"):
-
-
     ######################################################################
     # 1) MERGE METRICS + RENAME
     all_metrics = {}
@@ -273,7 +279,7 @@ def plot_spider_chart(base_metrics,
         return
 
     labels = list(valid_metrics.keys())                # e.g. ["Simulation Speed", "Current Accuracy", ...]
-    metrics = np.array(list(valid_metrics.values()))   # shape => (N, M) => N metrics x M models
+    metrics = np.array(list(valid_metrics.values()))   # shape => (N, M): N metrics x M models
     num_metrics = len(labels)
     num_models = metrics.shape[1]
 
@@ -298,10 +304,10 @@ def plot_spider_chart(base_metrics,
     angles_base = [n / float(num_metrics) * 2 * np.pi for n in range(num_metrics)]
     angles_poly = angles_base + angles_base[:1]
 
-    fig, ax = plt.subplots(figsize=(6, 4), subplot_kw={'polar': True})
+    # Create the polar subplot and get both the figure and axis objects
+    fig, ax = plt.subplots(figsize=(4.5, 4.5), subplot_kw={'polar': True})
     ax.set_facecolor('#f9f9f9')
     ax.spines['polar'].set_visible(False)
-
     ax.set_theta_offset(np.pi / 2)
     ax.set_theta_direction(-1)
 
@@ -320,10 +326,10 @@ def plot_spider_chart(base_metrics,
         color='gray',
         alpha=0.3
     )
-    # Extend to 105%
+    # Extend radial limit to 105%
     ax.set_ylim(0, 1.05)
     for lbl in lbls:
-        lbl.set_fontsize(11)
+        lbl.set_fontsize(16)
 
     ######################################################################
     # 4) METRIC LABELS AROUND THE CIRCLE
@@ -338,9 +344,9 @@ def plot_spider_chart(base_metrics,
     wrapped_labels = [two_line_label(lbl, width=12) for lbl in labels]
 
     ax.set_xticks(angles_base)
-    ax.set_xticklabels(wrapped_labels, fontsize=11)
+    ax.set_xticklabels(wrapped_labels, fontsize=14)
     # Increase distance of labels from the circle
-    ax.tick_params(axis='x', pad=15)
+    ax.tick_params(axis='x', pad=20)
 
     ######################################################################
     # 5) PLOT EACH MODEL’S POLYGON
@@ -368,7 +374,6 @@ def plot_spider_chart(base_metrics,
             linewidth=2,
             marker=marker_style,
             markersize=6
-            # No markeredgecolor for no white border
         )
         ax.fill(angles_poly, vals_poly, color=color, alpha=0.25)
 
@@ -382,14 +387,18 @@ def plot_spider_chart(base_metrics,
         legend_handles.append(legend_line)
 
     ######################################################################
-    # 6) LEGEND + OPTIONAL BOX
-    ax.legend(
+    # 6) PLACE THE LEGEND ABOVE THE PLOT
+    fig.legend(
         handles=legend_handles,
-        loc='upper right',
-        bbox_to_anchor=(1.7, 1.0),  # Move legend slightly to the right
-        title="Models",
-        fontsize=11,
-        title_fontsize=11
+        loc='upper center',
+        ncol=len(legend_handles),
+        # title="Models",
+        fontsize=16,
+        title_fontsize=14,
+        frameon=False,
+        handletextpad=0.5,
+        columnspacing=1.0,
+        bbox_to_anchor=(0.5, 1)
     )
 
     if is_work_point and param_dict is not None:
@@ -404,16 +413,13 @@ def plot_spider_chart(base_metrics,
             bbox=dict(boxstyle="round,pad=0.4", facecolor="white", alpha=0.8)
         )
 
-    # plt.title(f"Model Performance Radar {save_suffix}", y=1.08, fontsize=14)
-
-    plt.tight_layout()
-    plt.savefig(folder + f'/Figure_Spider_plot{save_suffix}.png', dpi=300)
+    # Adjust layout to ensure the radar chart remains centered and space is reserved for the legend.
+    plt.tight_layout(rect=[0, 0, 1, 0.9])
+    plt.savefig(f"{folder}/Figure_Spider_plot{save_suffix}.png", dpi=300)
     plt.show()
 
 
-
 ####################### MAIN SPIDER PLOT LOGIC ##############################
-
 
 if work_point_robustness:
     ########## INTERACTIVE WORK POINT MODE ##########

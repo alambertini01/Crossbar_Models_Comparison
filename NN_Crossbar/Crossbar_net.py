@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from mapping import weight_mapping, output_unmapping, quantization
+from NN_Crossbar.mapping import weight_mapping, output_unmapping, quantization
 from CrossbarModels.Crossbar_Models_pytorch import IdealModel
 
 

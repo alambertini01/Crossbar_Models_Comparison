@@ -9,16 +9,15 @@ import os
 import seaborn as sns
 import numpy as np
 import time
-from CrossbarModels.Crossbar_Models_pytorch import jeong_model, dmr_model, gamma_model, alpha_beta_model, solve_passive_model, crosssim_model, IdealModel
-from Crossbar_net import CustomNet, evaluate_model
+from CrossbarModels.Crossbar_Models_pytorch import jeong_model, dmr_model, alpha_beta_model, Memtorch_model, crosssim_model, IdealModel
+from NN_Crossbar.Crossbar_net import CustomNet, evaluate_model
 
 print("Available models:")
 available_models = {
     "jeong_model": jeong_model,
     "dmr_model": dmr_model,
-    "gamma_model": gamma_model,
     "alpha_beta_model": alpha_beta_model,
-    "solve_passive_model": solve_passive_model,
+    "solve_passive_model": Memtorch_model,
     "crosssim_model": crosssim_model,
     "IdealModel": IdealModel
 }
@@ -30,10 +29,8 @@ selected_model_name = list(available_models.keys())[model_choice]
 selected_model_function = available_models[selected_model_name]
 
 parasiticResistance = float(input("Enter parasitic resistance value: "))
-# R_lrs = float(input("Enter R_lrs value: "))
-R_lrs = 1000
-# R_hrs = float(input("Enter R_hrs value: "))
-R_hrs = 40000
+R_lrs = float(input("Enter R_lrs value: "))
+R_hrs = float(input("Enter R_hrs value: "))
 max_array_size = int(input("Enter max_array_size value: "))
 quant_bits = 0
 

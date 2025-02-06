@@ -6,6 +6,7 @@ backups/
 LTSpice/
 Results/
 Important_Results/
+Extra_Scripts/
 build/lib/CrossbarModels/
 data/
 .vscode/

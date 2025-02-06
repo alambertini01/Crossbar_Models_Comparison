@@ -9,20 +9,16 @@ from matplotlib.colors import to_hex, to_rgb, LinearSegmentedColormap, Normalize
 from matplotlib.cm import ScalarMappable
 from matplotlib.patches import Patch
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-from math import pi
 import time
 import tkinter as tk
 from tkinter import ttk
-import pandas as pd
-import openpyxl
-from openpyxl.styles import PatternFill
 from sklearn.linear_model import LinearRegression
 #Import NonLinear functions
 from CrossbarModels.Functions.NonLinear import resistance_array_to_x
 from CrossbarModels.Functions.NonLinear import calculate_resistance
 #Import the Crossbar Models
 from CrossbarModels.Crossbar_Models import *
-from CrossbarModels.Crossbar_Models_pytorch import gamma_model, dmr_model, jeong_model, crosssim_model, alpha_beta_model
+from CrossbarModels.Crossbar_Models_pytorch import dmr_model, jeong_model, crosssim_model, alpha_beta_model
 
 
 
@@ -38,29 +34,17 @@ input,output = (32,32)
 Models = [
     JeongModel("Jeongv1"),
     JeongModel_avg("Jeong"),
-    JeongModel_avg("jeong_avg1",k=0.1),
-    JeongModel_avg("jeong_avg2",k=0.2),
-    JeongModel_avg("jeong_avg3",k=0.3),
-    JeongModel_avg("jeong_avg4",k=0.4),
-    JeongModel_avg("jeong_avg5",k=0.5),
-    JeongModel_avg("jeong_avg6",k=0.6),
     JeongModel_avg("jeong_avg76",k=0.76),
     JeongModel_avg("jeong_avg8",k=0.8),
     JeongModel_avg("jeong_avg9",k=0.9),
     JeongModel_avg("jeong_avg92",k=0.92),
     JeongModel_avg("jeong_avg95",k=0.95),
-    JeongModel_avgv2("Jeong_torch"),
+    JeongModel_avg("Jeong_torch"),
     IdealModel("Ideal"),
     DMRModel("DMR_old"),
-    DMRModel_acc("DMR_acc"),
-    DMRModel_new("DMR"),
-    DMRModelv2("DMR_v2"),
-    DMRModel_new("DMR_torch"),
-    DMRModel_new("DMR_new_torch"),
-    GammaModel("Gamma_torch"),
-    GammaModel_acc("Gamma_acc_v1"),
-    GammaModel_acc_v2("γ"),
-    alpha_beta("alpha_beta_old"),
+    DMRModel_acc("DMR"),
+    DMRModel_acc("DMR_torch"),
+    alpha_beta("αβ-matrix_old"),
     alpha_beta_acc("αβ-matrix"),
     alpha_beta_acc("αβ-matrix_torch"),
     CrossSimModel("CrossSim"),
@@ -74,23 +58,21 @@ Models = [
     CrossSimModel("CrossSim8",Verr_th=1e-7),
     CrossSimModel("CrossSim9",Verr_th=1e-8),
     CrossSimModel("CrossSim10",Verr_th=1e-9),
-    CrossSimModel("CrossSim_torch",Verr_th=1e-10),
+    CrossSimModel("CrossSim_torch"),
     LTSpiceModel("LTSpice"),
     NgSpiceModel("NgSpice"),
     NgSpiceNonLinearModel("NgSpiceNonLinear"),
     MemtorchModelCpp("Memtorch_float"),
     MemtorchModelCpp_double("Memtorch"),
-    MemtorchModelPython("Memtorch_python")
 ]
 
 new_model_functions = {
-    "Gamma_torch": gamma_model,
     "DMR_torch": dmr_model,
     "Jeong_torch": jeong_model,
     "CrossSim_torch" : crosssim_model,
     "αβ-matrix_torch" : alpha_beta_model
 }
-enabled_models = [ "Ideal","Jeong", "αβ-matrix"]
+enabled_models = [ "Ideal","Jeong", "DMR" "αβ-matrix"]
 # enabled_models = [ "Ideal","Jeong","Jeong_avg","jeong_avg1", "jeong_avg2", "jeong_avg3", "jeong_avg4", "jeong_avg5","jeong_avg6", "jeong_avg76", "jeong_avg8","jeong_avg9", "jeong_avg92", "jeong_avg95"]
 # enabled_models = [ "Ideal","Jeong","DMR","αβ-matrix","CrossSim1","CrossSim2", "CrossSim3", "CrossSim4", "CrossSim5", "CrossSim6", "CrossSim7", "CrossSim8", "Memtorch", "NgSpice"]
 # enabled_models = [model.name for model in Models]
@@ -480,44 +462,6 @@ if Voltage_drops_error_plot:
             plt.tight_layout()
             plt.savefig(folder + f'/Figure_Relative_Voltage_drops_Rpar={parasiticResistance[z]}_MW={memoryWindow[m]}.png')
             relative_voltage_fig.show()
-
-
-if Metric_plot:
-    # 3D plots of the Metric
-    X_plot, Y_plot = np.meshgrid(parasiticResistance, memoryWindow)
-    x = X_plot.flatten()
-    y = Y_plot.flatten()
-    dx = dy = 0.5
-    if np.size(parasiticResistance) > 1:
-        dx = np.diff(parasiticResistance).min()
-    if np.size(memoryWindow) > 1:
-        dy = np.diff(memoryWindow).min()
-    max_Metric = ((Metric.T).flatten()).max()
-    num_models = len(enabled_models) - 1  # Exclude the reference model
-    # Calculate optimal rows and columns for the subplots
-    cols = int(np.ceil(np.sqrt(num_models)))
-    rows = int(np.ceil(num_models / cols))
-    # Create the subplots grid
-    figure_Metric, axs = plt.subplots(rows, cols, subplot_kw={'projection': '3d'}, figsize=(15, 7))
-    axs = np.array(axs).reshape(-1)  # Flatten to make indexing easier
-    plot_index = 0
-    for index, model in enumerate(enabled_models):
-        if model != reference_model:
-            dz = (Metric[:, :, index].T).flatten()
-            axs[plot_index].bar3d(x, y, np.zeros_like(dz), dx, dy, dz, shade=True, color=colors[plot_index % len(colors)])
-            axs[plot_index].set_title(model)
-            axs[plot_index].set_xlabel('Parasitic Resistance (Ohm)')
-            axs[plot_index].set_ylabel('Memory Window (Ohm)')
-            axs[plot_index].set_zlabel(error_label)
-            axs[plot_index].set_zlim(0, max_Metric)
-            plot_index += 1
-    # Hide any unused subplots
-    for ax in axs[plot_index:]:
-        ax.set_visible(False)
-    plt.tight_layout()
-    # Save and show the figure
-    figure_Metric.savefig(folder + '/Figure_Metric_plot.png')
-    plt.show()
 
 
 if Mean_Metric_plot:

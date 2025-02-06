@@ -12,8 +12,8 @@ import csv
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 
-from CrossbarModels.Crossbar_Models_pytorch import jeong_model, dmr_model, gamma_model, solve_passive_model, crosssim_model, IdealModel
-from Crossbar_net import CustomNet, evaluate_model
+from CrossbarModels.Crossbar_Models_pytorch import jeong_model, dmr_model, Memtorch_model, crosssim_model, IdealModel
+from NN_Crossbar.Crossbar_net import CustomNet, evaluate_model
 
 if __name__ == '__main__':
     # *************** User Parameters ***************
@@ -23,19 +23,19 @@ if __name__ == '__main__':
     # Primary fixed parameters
     R_lrs = 1e3
     
-    parasitic_resistances = torch.arange(1, 3, 0.5).tolist()
-    max_array_size = 64
+    parasitic_resistances = torch.arange(1, 3.1, 0.2).tolist()
+    max_array_size = 32
     model_functions = [ crosssim_model]
     bias_correction = False
     debug_plot = False
     debug_index = 0
     plot_confusion = False
-
+    
     batch_size=64
-    test_samples = 300
+    test_samples = 1000
 
     # Parameters to potentially sweep
-    R_hrs_values = torch.linspace(20000, 60000, steps=4).tolist()
+    R_hrs_values = torch.arange(20000, 60001, 4000).tolist()
     # R_hrs_values = 40000
     bits_values = 0
 
@@ -259,7 +259,7 @@ if __name__ == '__main__':
             X, Y = np.meshgrid(x_values, parasitic_resistances)
             Z = acc_matrix
             # Create a new figure
-            fig = plt.figure(figsize=(10, 8))
+            fig = plt.figure(figsize=(7, 5))
             ax = fig.add_subplot(111, projection='3d')
             # Plot the surface with a chosen colormap
             surf = ax.plot_surface(
@@ -297,7 +297,7 @@ if __name__ == '__main__':
             # When not sweeping an additional parameter, plot all models on the same figure
             # Initialize the plot only once
             if model_name == list(custom_accuracies.keys())[0]:
-                plt.figure(figsize=(12, 8))
+                plt.figure(figsize=(7, 5))
             # Plot each model's accuracy curve
             plt.plot(
                 parasitic_resistances,
@@ -340,4 +340,3 @@ if __name__ == '__main__':
 
     print("All results saved in:", results_folder)
     print("Accuracy data saved in:", csv_file)
-    
