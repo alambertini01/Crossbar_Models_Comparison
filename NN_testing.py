@@ -37,6 +37,8 @@ if __name__ == '__main__':
     # Parameters to potentially sweep
     R_hrs_values = torch.arange(20000, 60001, 4000).tolist()
     # R_hrs_values = 40000
+    R_hrs_values = torch.linspace(20000, 60000, steps=10).tolist()
+    R_hrs_values = 40000
     bits_values = 0
 
     # *************** Determine Sweeps ***************

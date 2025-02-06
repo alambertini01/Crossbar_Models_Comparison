@@ -16,3 +16,6 @@ env/
 *.sqlite3
 *.DS_Store
 *.ipynb_checkpoints
+Crossbar_Simulator_ArraySize_Sweep_work_point.py
+Crossbar_Simulator_ArraySize_Sweep.py
+NN_Training_gif.py

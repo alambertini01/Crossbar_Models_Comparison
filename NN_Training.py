@@ -40,12 +40,12 @@ print(f"Using device: {device}")
 
 # Hyperparameters
 hiddenLayer = 128
-batch_size = 128
+batch_size = 64
 learning_rate = 0.002
 epochs = 20
-save_checkpoint = False
-Fix_positive_weights = False
-early_stop_acc = 99
+save_checkpoint = True
+Fix_positive_weights = True
+early_stop_acc = 97
 
 # Data loading and preprocessing - using normalization for stability
 transform = transforms.Compose([
@@ -90,12 +90,43 @@ save_folder = f'TrainedModels/{selected_model_name}/Rpar{parasiticResistance}__L
 if not os.path.exists(save_folder):
     os.makedirs(save_folder)
 
+start_epoch = 0
+# Look for checkpoint files using the naming pattern we already use.
+checkpoint_files = glob.glob(os.path.join(save_folder, 'checkpoint_epoch_*.pth'))
+if checkpoint_files:
+    latest_checkpoint = max(checkpoint_files, key=os.path.getmtime)
+    try:
+        model.load_state_dict(torch.load(latest_checkpoint))
+        # Assuming a filename like 'checkpoint_epoch_3.pth'
+        start_epoch = int(os.path.basename(latest_checkpoint).split('_')[-1].split('.')[0]) + 1
+        print(f"Resuming training from checkpoint: {latest_checkpoint} (starting at epoch {start_epoch})")
+    except Exception as e:
+        print(f"Error loading checkpoint {latest_checkpoint}: {e}\nStarting training from scratch.")
+elif os.path.exists(os.path.join(save_folder, f'model_{selected_model_name}_full_statedict.pth')):
+    final_model_path = os.path.join(save_folder, f'model_{selected_model_name}_full_statedict.pth')
+    try:
+        model.load_state_dict(torch.load(final_model_path))
+        print(f"Found final model weights at {final_model_path}.")
+        cont = input("Training appears complete. Do you want to continue training? (y/n): ")
+        if cont.lower() == 'y':
+            additional_epochs = int(input("Enter additional epochs to train: "))
+            start_epoch = epochs  # current training was already complete
+            epochs += additional_epochs
+            print(f"Resuming training from epoch {start_epoch} to {epochs}")
+        else:
+            print("Exiting training.")
+            exit(0)
+    except Exception as e:
+        print(f"Error loading final model weights: {e}\nStarting training from scratch.")
+else:
+    print("No saved model found. Starting training from scratch.")
+
 train_accuracies = []
 plt.figure(figsize=(10, 5))
 
 train_time_start = time.time()
 
-for epoch in range(epochs):
+for epoch in range(start_epoch, epochs):
     model.train()
     train_loss = 0
     correct = 0
