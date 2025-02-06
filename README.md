@@ -22,8 +22,8 @@ A comprehensive tool for modeling and analyzing parasitic effects in crossbar ar
 
 ### Model Comparison
 - **Supported Models**  
-  \- Ideal, Jeong, DMR, αβ-matrix, CrossSim, Memtorch, LTSpice, NgSpice.  
-  \- Easily switch the reference model (CrossSim by default).  
+  \- Ideal, [Jeong](https://ieeexplore.ieee.org/document/8219726), [DMR](https://ieeexplore.ieee.org/document/9184938/), [αβ-matrix](https://ieeexplore.ieee.org/document/9691996/), [CrossSim](https://cross-sim.sandia.gov/), [Memtorch](https://ieeexplore.ieee.org/document/9180810/), ngSpice, LTSpice.   
+  \- Easily switch the reference model (CrossSim by default). 
 
 - **Parametric Analysis**  
   \- Adjustable array sizes.  
