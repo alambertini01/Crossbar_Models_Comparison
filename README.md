@@ -11,7 +11,7 @@ A comprehensive tool for modeling and analyzing parasitic effects in crossbar ar
    1.2 [Hardware-Aware Training](#hardware-aware-training)  
 2. [Installation](#installation)  
 3. [Usage](#usage)  
-   3.1 [MCrossbar Simulation](#crossbar-simulation)  
+   3.1 [Crossbar Simulation](#crossbar-simulation)  
    3.2 [Parasitic-Aware Neural Network](#parasitic-aware-neural-network)  
 4. [Suggestions for Improvement](#suggestions-for-improvement)  
 5. [Citation](#citation)  
