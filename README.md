@@ -84,21 +84,24 @@ A comprehensive tool for modeling and analyzing parasitic effects in crossbar ar
 ## Usage
 
 ### 1. Crossbar Simulation
+
 #### 1.1 Model Performance Comparison
 ```bash
 python Crossbar_Simulator.py
 ```
-![Model Performance Comparison](assets/scatter_64x64.png)
 - Ideal for in-depth current and voltage analysis on custom-sized arrays.  
 - Offers detailed parameter tuning (resistance ratios, device variability, etc.).
+
+<img src="assets/scatter.png" alt="Model Performance Comparison" width="1000">
 
 #### 1.2 Robustness Analysis
 ```bash
 python Crossbar_Simulator_Robustness.py
 ```
-![Robustness Analysis](assets/Radar_plots.png)
 - Runs comprehensive simulation sweeps across multiple parameters.  
 - Generates robustness metrics (radar plots, 3D MSE plots).
+
+<img src="assets/Radar_plots.png" alt="Robustness Analysis" width="1000">
 
 ### 2. Parasitic-Aware Neural Network
 
@@ -106,21 +109,23 @@ python Crossbar_Simulator_Robustness.py
 ```bash
 python NN_Training.py
 ```
-![Training Weights](assets/CrossSim_fc2.png)
 - Trains a two-layer MNIST classifier with PyTorch-based crossbar models (located in `CrossbarModels/Crossbar_Models_pytorch.py`).  
 - Command-line prompts allow setting parasitic resistance, HRS, tile size, etc.  
 - Additional parameters (LRS, quantization bits, training checkpoints) can be modified within the script.  
 - Trained models are saved in `TrainedModels/ModelName`.
 
+<img src="assets/CrossSim_fc2.png" alt="Training Weights" width="1000">
+
 #### 2.2 Testing
 ```bash
 python NN_testing.py
 ```
-![Software Trained Accuracy vs Parasitic Resistance](assets/accuracy_vs_Rpar.png)
 - Loads a trained model and evaluates its accuracy.  
 - Different models can be used as reference, but it's recommended to use the CrossSim model for reliable validation.  
 - Further analysis on accuracy can be performed by sweeping parameters like R_HRS and bits.
-- 
+
+<img src="assets/accuracy.png" alt="Software and Hardware Trained Accuracy" width="1000">
+
 ---
 
 ## Citation
