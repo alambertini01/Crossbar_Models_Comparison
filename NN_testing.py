@@ -23,8 +23,8 @@ if __name__ == '__main__':
     # Primary fixed parameters
     R_lrs = 1e3
     
-    parasitic_resistances = torch.arange(1, 3.1, 0.2).tolist()
-    max_array_size = 32
+    parasitic_resistances = torch.arange(0.1, 3.1, 0.1).tolist()
+    max_array_size = 128
     model_functions = [ crosssim_model]
     bias_correction = False
     debug_plot = False
@@ -35,11 +35,9 @@ if __name__ == '__main__':
     test_samples = 1000
 
     # Parameters to potentially sweep
-    R_hrs_values = torch.arange(20000, 60001, 4000).tolist()
-    # R_hrs_values = 40000
-    R_hrs_values = torch.linspace(20000, 60000, steps=10).tolist()
+    # R_hrs_values = torch.linspace(20000, 60000, steps=10).tolist()
     R_hrs_values = 40000
-    bits_values = 0
+    bits_values = 0         # 0 for floating point software precision
 
     # *************** Determine Sweeps ***************
     # Convert R_hrs_values and bits_values into lists if they aren't already
@@ -100,7 +98,6 @@ if __name__ == '__main__':
     #    transforms.ToTensor(),
     #    transforms.Lambda(lambda x: x / 2)  # Scale to [0,0.5]
     # ])
-
     transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize((0.1307,), (0.3081,))

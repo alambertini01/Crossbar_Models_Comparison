@@ -7,11 +7,13 @@ LTSpice/
 Results/
 Important_Results/
 Extra_Scripts/
+Crossbar_Models_Comparison.egg-info/
 build/lib/CrossbarModels/
 data/
 .vscode/
 env/
 .venv/
+venv/
 *.log
 *.sqlite3
 *.DS_Store

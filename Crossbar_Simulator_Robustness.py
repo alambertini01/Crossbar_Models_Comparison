@@ -69,7 +69,7 @@ work_point_robustness = False  # Toggle between modes
 
 
 # Crossbar dimensions sweep
-array_size = np.arange(100, 150, 10)
+array_size = np.arange(10,50, 10)
 # Sparsity of the matrix
 Rhrs_percentage = np.arange(10, 100, 10)
 # Parasitic resistance

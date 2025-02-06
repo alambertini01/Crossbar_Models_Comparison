@@ -4,10 +4,7 @@ import pytz
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
-from matplotlib.colors import to_hex, to_rgb, LinearSegmentedColormap, Normalize
-from matplotlib.cm import ScalarMappable
-from matplotlib.patches import Patch
+from matplotlib.colors import to_rgb
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import time
 import tkinter as tk
@@ -19,7 +16,6 @@ from CrossbarModels.Functions.NonLinear import calculate_resistance
 #Import the Crossbar Models
 from CrossbarModels.Crossbar_Models import *
 from CrossbarModels.Crossbar_Models_pytorch import dmr_model, jeong_model, crosssim_model, alpha_beta_model
-
 
 
 # Use this script to compare the performance (time and accuracy) of different parasitc resistance corsbar models
@@ -99,7 +95,7 @@ Metric_type = 1
 
 # Variability parameters
 v_flag = 0
-v_size = 100
+v_size = 10
 
 
 ############################ INITIALIZATIONS ############################
