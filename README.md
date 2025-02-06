@@ -1,100 +1,126 @@
-# Crossbar Parasitic Models Simulator
-## Overview
-The Crossbar Parasitics Simulator is a comprehensive tool for analyzing parasitic effects in crossbar arrays. It consists of two main components:
-1. **Model Comparison**: Benchmarks different parasitic resistance models from literature
-2. **Hardware-Aware Training**: Evaluates trained neural networks under realistic crossbar conditions
+
+# Crossbar Parasitics Simulator
+
+A comprehensive tool for modeling and analyzing parasitic effects in crossbar arrays. This repository provides two main functionalities:
+1. **Model Comparison** – Benchmarks a variety of parasitic resistance models from the literature.  
+2. **Hardware-Aware Training** – Enables training and evaluation of neural networks using the models.
+
+## Table of Contents
+1. [Features](#features)  
+   1.1 [Model Comparison](#model-comparison)  
+   1.2 [Hardware-Aware Training](#hardware-aware-training)  
+2. [Installation](#installation)  
+3. [Usage](#usage)  
+   3.1 [MCrossbar Simulation](#crossbar-simulation)  
+   3.2 [Parasitic-Aware Neural Network](#parasitic-aware-neural-network)  
+4. [Suggestions for Improvement](#suggestions-for-improvement)  
+5. [Citation](#citation)  
+
+---
 
 ## Features
+
 ### Model Comparison
-- **Multiple Models Support**:
-  - JeongModel, IdealModel, DMR, Gamma, CrossSim, LTSpice, NgSpice, Memtorch
-  - Configurable reference model (default: NgSpice)
+- **Supported Models**  
+  \- Ideal, Jeong, DMR, αβ-matrix, CrossSim, Memtorch, LTSpice, NgSpice.  
+  \- Easily switch the reference model (CrossSim by default).  
 
-- **Parametric Analysis**:
-  - Array size (default: 32x32)
-  - Parasitic resistance values
-  - Memory window ratios (HRS/LRS)
-  - Sparsity (% of HRS devices in the crossbar)
-  - Device variability and non-linearities
+- **Parametric Analysis**  
+  \- Adjustable array sizes.  
+  \- Configurable parasitic resistance values, memory window ratios (HRS/LRS), and device non-linearities.  
+  \- Tunable sparsity levels (% of HRS devices).  
+  \- Device variability for realistic crossbar simulation.  
 
-- **Performance Metrics**:
-  - Execution time benchmarking
-  - Current and voltage relative errors
-  - Robustness metrics
+- **Performance Metrics**  
+  \- Execution time benchmarking.  
+  \- Current/voltage error measurements (relative error).  
+  \- Robustness evaluations under varying crossbar parameters.  
 
 ### Hardware-Aware Training
-- **Neural Network Features**:
-  - Two-layer fully connected architecture
-  - MNIST dataset compatibility
-  - Configurable hidden layer size
+- **Neural Network Setup**  
+  \- Two-layer fully connected architecture for MNIST classification.  
+  \- Customizable hidden layer size.  
+  \- Linear conductance mapping for weights, with optional quantization schemes.  
+  \- Configurable positive-only weight constraints.  
 
-- **Hardware Modeling**:
-  - Linear conductance mapping for weights
-  - Configurable quantization schemes
-  - Parasitic resistance incorporation
-  - Array size partitioning for large networks
-  - Adjustable resistance ratios (HRS/LRS)
-  - Positive-only weight constraints option
-
-- **Analysis Tools**:
-  - Real-time accuracy monitoring
-  - Multi-model comparison plots
-  - Weight/bias distribution heatmaps
-  - Confusion matrix visualization
-  - CSV logging of performance metrics
-  - 3D surface plots for parameter sweeps
+- **Hardware Modeling**  
+  \- Parasitic resistance incorporation into training, using parasitic models with automatic differentiation.  
+  \- Flexible tile partitioning, linear mapping of weights to conductances and quantization.  
+  \- Weight, bias, and confusion matrix visualizations after training.
+  \- 2D and 3D accuracy plots for avaluation
 
 ---
 
-## **Getting Started**
+## Installation
 
-1. **Clone the repository**
-  ```bash
-  git clone https://github.com/alambertini01/Crossbar_Models_Comparison
-  cd Crossbar_Models_Comparison
-  ```
+1. **Clone the Repository**  
+   ```bash
+   git clone https://github.com/alambertini01/Crossbar_Models_Comparison
+   cd Crossbar_Models_Comparison
+   ```
 
-2. **Set up a virtual environment (optional):**
+2. **Create and Activate a Virtual Environment (Optional)**  
+   **Windows**:
+   ```bash
+   python -m venv venv
+   venv\Scripts\activate
+   ```  
+   **macOS/Linux**:
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
 
-  For Windows:
+3. **Install the Package**  
+   ```bash
+   pip install -e .
+   ```
 
-  
-    ```bash
-    python -m venv venv
-    venv\Scripts\activate
-    ```
-  For macOS/Linux:
-
-    ```bash
-    python3 -m venv venv
-    source venv/bin/activate
-    ```
-
-
-3. **Install the package:**
-
-```bash
-pip install -e .
-```
+4. **(Optional) Installing NgSpice**  
+   If you plan to use the NgSpice-based model:
+   ```bash
+   pyspice-post-installation --install-ngspice-dll
+   pyspice-post-installation --check-install
+   ```
 
 ---
 
-### Usage
-1. **Model Comparison**
+## Usage
+
+### 1. Crossbar Simulation
+#### 1.1 Model Performance Comparison
 ```bash
 python Crossbar_Simulator.py
 ```
+- Ideal for in-depth current and voltage analysis on custom-sized rectangular arrays.  
+- Offers parameter tuning (resistance ratios, device variability, etc.).
 
-2. **Neural Network Training**
+#### 1.2 Robustness Analysis
+```bash
+python Crossbar_Simulator_Robustness.py
+```
+- Runs extensive simulation sweeps across multiple parameters.  
+- Generates robustness metrics (radar plots, 3D MSE plots).
+
+### 2. Parasitic-Aware Neural Network
+
+#### 2.1 Training
 ```bash
 python NN_Training.py
 ```
+- Trains a two-layer MNIST classifier with PyTorch-based crossbar models (located in `CrossbarModels/Crossbar_Models_pytorch.py`).  
+- Command-line prompts allow setting parasitic resistance, HRS, tile size, etc.  
+- Additional parameters (LRS, quantization bits, training checkpoints) can be modified within the script.  
+- Trained models are saved in `TrainedModels/ModelName`.
 
-3. **Trained network Evaluation**
+#### 2.2 Testing
 ```bash
 python NN_testing.py
 ```
-
+- Loads a trained model and evaluates its accuracy.  
+- Different models can be used as reference, but it's recommended to use the CrossSim model for reliable validation.  
+- Further analysis on accuracy can be performed by sweeping parameters like R_HRS and bits.
+- 
 ---
 
 ## Citation
