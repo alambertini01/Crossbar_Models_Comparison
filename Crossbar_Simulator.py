@@ -24,7 +24,7 @@ from CrossbarModels.Crossbar_Models_pytorch import dmr_model, jeong_model, cross
 ############################ PARAMETERS ##############################
 
 # Dimensions of the crossbar
-input,output = (32,32)
+input,output = (64,64)
 
 # Initialize each model instance
 Models = [
@@ -68,7 +68,7 @@ new_model_functions = {
     "CrossSim_torch" : crosssim_model,
     "αβ-matrix_torch" : alpha_beta_model
 }
-enabled_models = [ "Ideal","Jeong", "DMR" "αβ-matrix"]
+enabled_models = [ "Ideal","Jeong", "DMR", "αβ-matrix"]
 # enabled_models = [ "Ideal","Jeong","Jeong_avg","jeong_avg1", "jeong_avg2", "jeong_avg3", "jeong_avg4", "jeong_avg5","jeong_avg6", "jeong_avg76", "jeong_avg8","jeong_avg9", "jeong_avg92", "jeong_avg95"]
 # enabled_models = [ "Ideal","Jeong","DMR","αβ-matrix","CrossSim1","CrossSim2", "CrossSim3", "CrossSim4", "CrossSim5", "CrossSim6", "CrossSim7", "CrossSim8", "Memtorch", "NgSpice"]
 # enabled_models = [model.name for model in Models]
