@@ -92,7 +92,7 @@ python Crossbar_Simulator.py
 - Ideal for in-depth current and voltage analysis on custom-sized arrays.  
 - Offers detailed parameter tuning (resistance ratios, device variability, etc.).
 
-<img src="assets/scatter.png" alt="Model Performance Comparison" width="1000">
+<img src="assets/Voltage_drops.png" alt="Model Performance Comparison" width="1000">
 
 #### 1.2 Robustness Analysis
 ```bash
