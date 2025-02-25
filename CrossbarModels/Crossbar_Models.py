@@ -95,6 +95,37 @@ class JeongModel_avg(CrossbarModel):
         return voltage_drops_jeong, current_jeong
     
 
+class JeongModel_adaptive(CrossbarModel):
+    def calculate(self, R, parasiticResistance, Potential, R_lrs, MW, Rhrs_percentage, **kwargs):
+        
+        k= np.interp(Rhrs_percentage, [10, 100], [1.3, 0.4])
+        input, output = R.shape
+        # Precompute cumulative sums using cumsum
+        weights_wl = np.arange(output, 0, -1, dtype=float)
+        A_jeong = parasiticResistance * np.cumsum(weights_wl)
+        weights_bl = np.arange(input, 0, -1, dtype=float)
+        B_jeong = parasiticResistance * np.sum(weights_bl)
+
+        # Calculate Rd_avg (the average resistance)
+        R_hrs = R_lrs*MW
+        a = R_lrs**(-k)
+        b = R_hrs**(-k)
+        Rd_avg = (a * R_lrs + b * R_hrs) / (a + b)
+
+        V_a_matrix = np.tile(Potential.reshape(-1, 1), output)
+        Va = np.mean(Potential)
+        
+        voltage_drops_jeong = V_a_matrix
+
+        I_appr= input*Va*np.reciprocal(A_jeong+Rd_avg+B_jeong)
+        I_ideal_avg = input*Va/Rd_avg
+        I_ideal = Potential@np.reciprocal(R)
+
+        current_jeong = I_ideal*I_appr/I_ideal_avg
+
+        return voltage_drops_jeong, current_jeong
+    
+
 class DMRModel(CrossbarModel):
     def calculate(self, R, parasiticResistance, Potential, **kwargs):
 
@@ -206,6 +237,7 @@ class alpha_beta(CrossbarModel):
                 num_beta = I[i, output-1] * g_word + sum((k - 1) * I[i, j + k - 1] for k in range(1, output - j + 1)) * G[i, output-1]
                 denom_beta = I[i, output-1] * g_word + sum(k * I[i, k - 1] for k in range(1, output + 1)) * G[i, output-1]
                 beta_gm[i, j] = num_beta / denom_beta
+        
                 
         V_a_matrix = np.tile(Potential.reshape(-1, 1), output)
         voltage_drops_gamma = alpha_gm * V_a_matrix * beta_gm

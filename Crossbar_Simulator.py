@@ -1,3 +1,5 @@
+# Use this script to compare the performance (time and accuracy) of different parasitc resistance corsbar models
+
 import random
 import datetime
 import pytz
@@ -18,23 +20,22 @@ from CrossbarModels.Crossbar_Models import *
 from CrossbarModels.Crossbar_Models_pytorch import dmr_model, jeong_model, crosssim_model, alpha_beta_model
 
 
-# Use this script to compare the performance (time and accuracy) of different parasitc resistance corsbar models
-
 
 ############################ PARAMETERS ##############################
 
 # Dimensions of the crossbar
-input,output = (64,64)
+input,output = (32,32)
 
 # Initialize each model instance
+# Define k values using numpy arange
+k_values = np.arange(0.1, 1.0, 0.05)  # Generates [0.1, 0.15, 0.2, ..., 0.95]
+# Define Verr_th values for CrossSimModel
+Verr_th_values = [10**-i for i in range(1, 10)]  # Generates [1e-1, 1e-2, ..., 1e-9]
 Models = [
-    JeongModel("Jeongv1"),
-    JeongModel_avg("Jeong"),
-    JeongModel_avg("jeong_avg76",k=0.76),
-    JeongModel_avg("jeong_avg8",k=0.8),
-    JeongModel_avg("jeong_avg9",k=0.9),
-    JeongModel_avg("jeong_avg92",k=0.92),
-    JeongModel_avg("jeong_avg95",k=0.95),
+    JeongModel("mod_Jeong"),
+    JeongModel_avg("Jeong_avg"),
+    JeongModel_adaptive("Jeong"),
+    *[JeongModel_avg(f"jeong_avg{k:.2f}".replace(".", "_"), k=k) for k in k_values],  # Dynamic Jeong_avg models
     JeongModel_avg("Jeong_torch"),
     IdealModel("Ideal"),
     DMRModel("DMR_old"),
@@ -44,16 +45,7 @@ Models = [
     alpha_beta_acc("αβ-matrix"),
     alpha_beta_acc("αβ-matrix_torch"),
     CrossSimModel("CrossSim"),
-    CrossSimModel("CrossSim1",Verr_th=0.5),
-    CrossSimModel("CrossSim2",Verr_th=1e-1),
-    CrossSimModel("CrossSim3",Verr_th=1e-2),
-    CrossSimModel("CrossSim4",Verr_th=1e-3),
-    CrossSimModel("CrossSim5",Verr_th=1e-4),
-    CrossSimModel("CrossSim6",Verr_th=1e-5),
-    CrossSimModel("CrossSim7",Verr_th=1e-6),
-    CrossSimModel("CrossSim8",Verr_th=1e-7),
-    CrossSimModel("CrossSim9",Verr_th=1e-8),
-    CrossSimModel("CrossSim10",Verr_th=1e-9),
+    *[CrossSimModel(f"CrossSim{i+1}", Verr_th=Verr_th) for i, Verr_th in enumerate(Verr_th_values)],  # Dynamic CrossSim models
     CrossSimModel("CrossSim_torch"),
     LTSpiceModel("LTSpice"),
     NgSpiceModel("NgSpice"),
@@ -62,13 +54,19 @@ Models = [
     MemtorchModelCpp_double("Memtorch"),
 ]
 
+
 new_model_functions = {
     "DMR_torch": dmr_model,
     "Jeong_torch": jeong_model,
     "CrossSim_torch" : crosssim_model,
     "αβ-matrix_torch" : alpha_beta_model
 }
-enabled_models = [ "Ideal","Jeong", "DMR", "αβ-matrix"]
+
+
+# Enabled models
+enabled_models = ["Ideal", "αβ-matrix","Jeong"]
+# enabled_models += [f"jeong_avg{k:.2f}".replace(".", "_") for k in k_values]  # Append all Jeong_avg models
+
 # enabled_models = [ "Ideal","Jeong","Jeong_avg","jeong_avg1", "jeong_avg2", "jeong_avg3", "jeong_avg4", "jeong_avg5","jeong_avg6", "jeong_avg76", "jeong_avg8","jeong_avg9", "jeong_avg92", "jeong_avg95"]
 # enabled_models = [ "Ideal","Jeong","DMR","αβ-matrix","CrossSim1","CrossSim2", "CrossSim3", "CrossSim4", "CrossSim5", "CrossSim6", "CrossSim7", "CrossSim8", "Memtorch", "NgSpice"]
 # enabled_models = [model.name for model in Models]
@@ -82,9 +80,9 @@ Rhrs_percentage=50
 parasiticResistance = np.arange(0.1, 5.1, 0.1)
 # parasiticResistance = np.array([5])
 
-# Memory window (ratio between Hrs and Lrs)
+# Memory window (ratio between Hrs and Lrs)s
 memoryWindow = np.arange(5, 101, 2)
-# memoryWindow = np.array([40])
+# memoryWindow = np.array([20])
 
 # Input voltages parameters
 v_On_percentage = 100
@@ -95,7 +93,7 @@ Metric_type = 1
 
 # Variability parameters
 v_flag = 0
-v_size = 10
+v_size = 100
 
 
 ############################ INITIALIZATIONS ############################
@@ -223,7 +221,7 @@ for m in range(memorySize):
                     else:
                         # Call the numpy function
                         # NonLinear_params needed only for NgSpiceNonLinear as shown in original code
-                        Extra_params = {'X': X[z,m,v], 'S': S[z,m,v]} if model.name == 'NgSpiceNonLinear' else {'R_lrs': R_lrs, 'MW':memoryWindow[m]}
+                        Extra_params = {'X': X[z,m,v], 'S': S[z,m,v]} if model.name == 'NgSpiceNonLinear' else {'R_lrs': R_lrs, 'MW':memoryWindow[m], 'Rhrs_percentage':Rhrs_percentage}
                         
                         start_time = time.perf_counter()
                         v_drop, out_curr = model.calculate(R[z, m, v], parasiticResistance[z], Potential, **Extra_params)
@@ -266,18 +264,29 @@ if "Ideal" in enabled_models:
 ###################### Plotting portion ##########################################################################
 
 # Known color mapping
+# Base color for Jeong (cyan)
+import matplotlib.colors as mcolors
+base_cyan = np.array(mcolors.to_rgb("c"))  # RGB value of cyan
+dark_cyan = np.array([0, 0.4, 0.4])  # Darker cyan for lower k values
+# Generate a gradient of cyan shades for Jeong_avg models
+jeong_avg_colors = {
+    f"jeong_avg{k:.2f}".replace(".", "_"): mcolors.to_hex(dark_cyan * (1 - k) + base_cyan * k)
+    for k in k_values
+}
+# Base color mapping
 color_mapping = {
     "Jeong": "c",
     "DMR": "g",
     "γ": "darkred",
     "αβ-matrix": "r",
-    "Ng": "pink",
+    "Ng": "purple",
     "CrossSim": "b",
     "Ideal": "black",
     "Memtorch": "orange",
-    "LTSpice": "m"
+    "LTSpice": "m",
 }
-
+# Merge color mappings
+color_mapping.update(jeong_avg_colors)
 # Generate the colors list
 colors = [
     color_mapping[next((key for key in color_mapping if model.startswith(key)), None)] 

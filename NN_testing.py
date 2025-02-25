@@ -12,7 +12,7 @@ import csv
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 
-from CrossbarModels.Crossbar_Models_pytorch import jeong_model, dmr_model, Memtorch_model, crosssim_model, IdealModel
+from CrossbarModels.Crossbar_Models_pytorch import jeong_model, dmr_model, alpha_beta_model, Memtorch_model, crosssim_model, IdealModel
 from NN_Crossbar.Crossbar_net import CustomNet, evaluate_model
 
 if __name__ == '__main__':
@@ -23,16 +23,16 @@ if __name__ == '__main__':
     # Primary fixed parameters
     R_lrs = 1e3
     
-    parasitic_resistances = torch.arange(0.1, 3.1, 0.1).tolist()
-    max_array_size = 128
-    model_functions = [ crosssim_model]
-    bias_correction = False
-    debug_plot = False
+    parasitic_resistances = torch.arange(1, 4, 1).tolist()
+    max_array_size = 784
+    model_functions = [crosssim_model, jeong_model, dmr_model, alpha_beta_model, IdealModel]
+    bias_correction = True
+    debug_plot = True
     debug_index = 0
-    plot_confusion = False
+    plot_confusion = True
     
-    batch_size=64
-    test_samples = 1000
+    batch_size=1
+    test_samples = 2
 
     # Parameters to potentially sweep
     # R_hrs_values = torch.linspace(20000, 60000, steps=10).tolist()
@@ -93,15 +93,15 @@ if __name__ == '__main__':
         exit()
     weights = torch.load(weights_path, map_location=device)
 
-    # # Data loading
-    # transform = transforms.Compose([
-    #    transforms.ToTensor(),
-    #    transforms.Lambda(lambda x: x / 2)  # Scale to [0,0.5]
-    # ])
+    # Data loading
     transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,))
+       transforms.ToTensor(),
+       transforms.Lambda(lambda x: x / 2)  # Scale to [0,0.5]
     ])
+    # transform = transforms.Compose([
+    #     transforms.ToTensor(),
+    #     transforms.Normalize((0.1307,), (0.3081,))
+    # ])
 
     test_dataset = datasets.MNIST('./data', train=False, download=True, transform=transform)
     small_test_dataset = Subset(test_dataset, torch.arange(test_samples))
@@ -119,7 +119,7 @@ if __name__ == '__main__':
     colors = {
         'crosssim_model': 'blue',
         'jeong_model': 'cyan',
-        'gamma_model': 'red',
+        'alpha_beta_model': 'red',
         'dmr_model': 'green',
         'solve_passive_model': 'orange',
         'IdealModel': 'black'
