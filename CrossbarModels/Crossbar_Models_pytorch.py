@@ -1,6 +1,9 @@
 import torch
-from .Models import memtorch_bindings # type: ignore
 from torch.autograd import Variable
+try:
+    from .Models import memtorch_bindings # type: ignore
+except ImportError as e:
+    print(f"Warning: Could not import memtorch_bindings: {e}")
 
 # Jeong model implementation
 # Computes voltage drops and currents for given weights and inputs
@@ -26,7 +29,7 @@ def jeong_model_mod(weight, x, parasiticResistance, **kwargs):
     return current_jeong
 
 
-def jeong_model(weight, x, parasiticResistance, R_lrs, R_hrs, k=0.2, epsilon=1e-10):
+def jeong_model(weight, x, parasiticResistance, R_lrs, R_hrs, k=0.6, epsilon=1e-10):
 
     device = weight.device
     dtype = weight.dtype

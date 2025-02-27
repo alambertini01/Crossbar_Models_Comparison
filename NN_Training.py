@@ -44,22 +44,23 @@ print(f"Using device: {device}")
 hiddenLayer = 128
 batch_size = 64
 learning_rate = 0.002
-epochs = 20
+epochs = 50
 save_checkpoint = True
 Fix_positive_weights = True
-early_stop_acc = 99
+Fix_positive_inputs = False
+early_stop_acc = 97
 
 # Data loading
-transform = transforms.Compose([
+if (Fix_positive_inputs):
+    transform = transforms.Compose([
     transforms.ToTensor(),
     transforms.Lambda(lambda x: x / 2)  # Scale to [0,0.5]
-])
-
-# # Data loading and preprocessing - using normalization for stability
-# transform = transforms.Compose([
-#     transforms.ToTensor(),
-#     transforms.Normalize((0.1307,), (0.3081,))
-# ])
+    ])
+else:
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.1307,), (0.3081,))
+    ])
 
 train_dataset = datasets.MNIST('./data', train=True, download=True, transform=transform)
 test_dataset = datasets.MNIST('./data', train=False, download=True, transform=transform)

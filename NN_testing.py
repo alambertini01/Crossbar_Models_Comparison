@@ -28,7 +28,7 @@ if __name__ == '__main__':
 
     # Other fixed parameters
     model_functions = [crosssim_model, jeong_model_mod, jeong_model, IdealModel]
-    Fix_positive_inputs = False
+    Fix_positive_inputs = True
     bias_correction = False
     debug_plot = True
     debug_index = 4
