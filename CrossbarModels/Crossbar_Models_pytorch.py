@@ -4,7 +4,7 @@ from torch.autograd import Variable
 
 # Jeong model implementation
 # Computes voltage drops and currents for given weights and inputs
-def jeong_model(weight, x, parasiticResistance):
+def jeong_model_mod(weight, x, parasiticResistance, **kwargs):
     epsilon = 1e-8  # Small constant to prevent division by zero
     input_size, output_size = weight.shape
     # batch_size = x.shape[0]
@@ -26,7 +26,43 @@ def jeong_model(weight, x, parasiticResistance):
     return current_jeong
 
 
-def dmr_model(weight: torch.Tensor, x: torch.Tensor, parasiticResistance: float):
+def jeong_model(weight, x, parasiticResistance, R_lrs, R_hrs, k=0.6, epsilon=1e-10):
+
+    device = weight.device
+    dtype = weight.dtype
+    input_size, output_size = weight.shape
+    # -----------------------------
+    # Compute the Jeong pre-factors:
+    # -----------------------------
+    # For the word-line (columns) contribution: create a descending sequence  [output_size, ..., 1]
+    weights_wl = torch.arange(output_size, 0, -1, dtype=dtype, device=device)
+    A_jeong = parasiticResistance * torch.cumsum(weights_wl, dim=0)  # shape: (output_size,)
+    # For the bit-line (rows) contribution: create a descending sequence [input_size, ..., 1]
+    # Here, B_jeong is a scalar: parasiticResistance times the sum of the weights.
+    weights_bl = torch.arange(input_size, 0, -1, dtype=dtype, device=device)
+    B_jeong = parasiticResistance * torch.sum(weights_bl)  # scalar
+    # -----------------------------
+    # Compute the adaptive resistance average (Rd_avg):
+    # -----------------------------
+    a = R_lrs**(-k)
+    b = R_hrs**(-k)
+    Rd_avg = (a * R_lrs + b * R_hrs) / (a + b)  # scalar (or 0D tensor)
+    Va = 0.5
+    # I_appr: approximated current per column. Note that input_size plays the role of "number of rows".
+    # A_jeong is (output_size,), Rd_avg and B_jeong are scalars; broadcasting gives I_appr a shape of (batch_size, output_size).
+    I_appr = input_size * Va * torch.reciprocal(A_jeong + Rd_avg + B_jeong + epsilon)
+    # I_ideal_avg: the average ideal current per sample.
+    I_ideal_avg = input_size * Va / (Rd_avg + epsilon)
+    # I_ideal: computed as a dot product between the input potentials and the reciprocal of the weight matrix.
+    I_ideal = torch.matmul(x, weight+epsilon)  # shape: (batch_size, output_size)
+    # Scale the ideal current with the approximated factors.
+    current_jeong = I_ideal * I_appr / I_ideal_avg  # shape: (batch_size, output_size)
+
+    return current_jeong
+
+
+
+def dmr_model(weight: torch.Tensor, x: torch.Tensor, parasiticResistance: float, **kwargs):
     """
     PyTorch adaptation of DMRModel_new for batched inputs.
     Computes only the current (no voltage-drop output).
@@ -108,7 +144,7 @@ def dmr_model(weight: torch.Tensor, x: torch.Tensor, parasiticResistance: float)
 
 
 
-def alpha_beta_model(weight, x, parasiticResistance):
+def alpha_beta_model(weight, x, parasiticResistance, **kwargs):
     """
     PyTorch adaptation of the alpha-beta model for batched inputs.
 
@@ -238,7 +274,7 @@ def alpha_beta_model(weight, x, parasiticResistance):
 
 # Memtorch solve_passive model
 # Uses memtorch_bindings to solve passive networks and obtain voltage drops and currents
-def Memtorch_model(weight, x, parasiticResistance):
+def Memtorch_model(weight, x, parasiticResistance, **kwargs):
     return memtorch_bindings.solve_passive(
         weight.double(),
         x.double(),
@@ -251,7 +287,7 @@ def Memtorch_model(weight, x, parasiticResistance):
 
 # Ideal model implementation
 # Computes currents based on ideal weight and input conditions
-def IdealModel(weight, x, parasiticResistance):
+def IdealModel(weight, x, parasiticResistance, **kwargs):
     if len(x.shape) == 1:
         x = x.unsqueeze(0)  # Add batch dimension if input is a single sample
     return torch.matmul(x, weight)  # Supports batched input
@@ -260,7 +296,7 @@ def IdealModel(weight, x, parasiticResistance):
 
 # CrossSim model implementation
 # Iteratively solves for voltage and current using parasitic resistance
-def crosssim_model(weight, x, parasiticResistance, Verr_th=1e-2, hide_convergence_msg=0):
+def crosssim_model(weight, x, parasiticResistance, Verr_th=1e-2, hide_convergence_msg=0, **kwargs):
     """
     Wrapper that implements a convergence loop around the circuit solver using PyTorch.
     Each solver uses successive under-relaxation.

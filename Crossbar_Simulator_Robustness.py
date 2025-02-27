@@ -17,9 +17,6 @@ from CrossbarModels.Functions.NonLinear import calculate_resistance
 # Import the Crossbar Models
 from CrossbarModels.Crossbar_Models import *
 
-############################ PARAMETERS ##############################
-
-
 # Define k values using numpy arange
 k_values = np.arange(0.1, 1.5, 0.05)  # Generates [0.1, 0.15, 0.2, ..., 0.95]
 # Define Verr_th values for CrossSimModel
@@ -27,11 +24,10 @@ Verr_th_values = [10**-i for i in range(1, 10)]  # Generates [1e-1, 1e-2, ..., 1
 
 # Initialize each model instance
 Models = [
-    JeongModel("mod_Jeong"),
-    JeongModel_avg("Jeong_avg"),
-    JeongModel_adaptive("Jeong"),
-    *[JeongModel_avg(f"jeong_avg{k:.2f}".replace(".", "_"), k=k) for k in k_values],  # Dynamic Jeong_avg models
-    JeongModel_avg("Jeong_torch"),
+    JeongModel_mod("mod_Jeong"),
+    JeongModel("Jeong"),
+    *[JeongModel_k_fixed(f"jeong_avg{k:.2f}".replace(".", "_"), k=k) for k in k_values],  # Dynamic Jeong_avg models
+    JeongModel("Jeong_torch"),
     IdealModel("Ideal"),
     DMRModel("DMR_old"),
     DMRModel_acc("DMR"),
@@ -49,20 +45,20 @@ Models = [
     MemtorchModelCpp_double("Memtorch"),
 ]
 
+
+
+############################ PARAMETERS ##############################
+
 # Enabled models
 enabled_models = ["Ideal", "Jeong", "MW_Jeong", "DMR", "αβ-matrix"]
 # enabled_models += [f"jeong_avg{k:.2f}".replace(".", "_") for k in k_values]  # Append all Jeong_avg models
 
 reference_model = "CrossSim"
-enabled_models.append(reference_model)
-
-modelSize = len(enabled_models)
 show_first_model = False
 show_reference_model = False
 current_Metric = 1
 
 work_point_robustness = False  # Toggle between modes
-
 
 # Crossbar dimensions sweep
 array_size = np.arange(10,50, 10)
@@ -83,6 +79,8 @@ population = [0.5, 0.0001]
 v_flag = 1
 
 # Initialize time measurements
+enabled_models.append(reference_model)
+modelSize = len(enabled_models)
 simulation_times = np.zeros((modelSize, np.size(array_size)))
 
 # Initialize Metric arrays
@@ -560,52 +558,6 @@ else:
     )
 
 
-# # Compute heatmap for Array Size vs HRS%
-# avg_error_arr = np.mean(Current_error, axis=(1, 2, 3))  # (arraySize, HRS%, modelSize)
-# jeong_avg_idx = [i for i, name in enumerate(enabled_models) if name.startswith("jeong_avg")]
-# best_arr_idx = np.argmin(avg_error_arr[:, :, jeong_avg_idx], axis=2)
-# best_k_arr = k_values[best_arr_idx]
-
-# # Compute heatmap for Rpar vs HRS%
-# avg_error_par = np.mean(Current_error, axis=(0, 2, 3))  # (parasiticResistance, HRS%, modelSize)
-# best_par_idx = np.argmin(avg_error_par[:, :, jeong_avg_idx], axis=2)
-# best_k_par = k_values[best_par_idx]
-
-# # Compute heatmap for HRS% vs Memory Window
-# avg_error_mw = np.mean(Current_error, axis=(0, 1, 3))  # (memorySize, HRS%, modelSize)
-# best_mw_idx = np.argmin(avg_error_mw[:, :, jeong_avg_idx], axis=2)
-# best_k_mw = k_values[best_mw_idx]
-
-# fig, axes = plt.subplots(1, 3, figsize=(24, 7))
-
-# im0 = axes[0].imshow(best_k_arr, origin='lower', aspect='auto',
-#                      extent=[Rhrs_percentage[0], Rhrs_percentage[-1], array_size[0], array_size[-1]],
-#                      cmap='viridis')
-# axes[0].set_xlabel("HRS%")
-# axes[0].set_ylabel("Array Size")
-# axes[0].set_title("Best k (Array Size vs HRS%)")
-# fig.colorbar(im0, ax=axes[0], label="k value")
-
-# im1 = axes[1].imshow(best_k_par, origin='lower', aspect='auto',
-#                      extent=[Rhrs_percentage[0], Rhrs_percentage[-1], parasiticResistance[0], parasiticResistance[-1]],
-#                      cmap='viridis')
-# axes[1].set_xlabel("HRS%")
-# axes[1].set_ylabel("Parasitic Resistance")
-# axes[1].set_title("Best k (Rpar vs HRS%)")
-# fig.colorbar(im1, ax=axes[1], label="k value")
-
-# im2 = axes[2].imshow(best_k_mw, origin='lower', aspect='auto',
-#                      extent=[Rhrs_percentage[0], Rhrs_percentage[-1], memoryWindow[0], memoryWindow[-1]],
-#                      cmap='viridis')
-# axes[2].set_xlabel("HRS%")
-# axes[2].set_ylabel("Memory Window")
-# axes[2].set_title("Best k (MW vs HRS%)")
-# fig.colorbar(im2, ax=axes[2], label="k value")
-
-# plt.tight_layout()
-# plt.show()
-
-
 
 ###################### 1) Processing Time Plot ########################
 ideal_index = enabled_models.index("Ideal")
@@ -869,4 +821,48 @@ for i, (data_type, data_vals, label, err_lbl) in enumerate(zip(data_types, data_
         plt.show()
 
 
+if any(name.startswith("jeong_avg") for name in enabled_models):
+    # Compute heatmap for Array Size vs HRS%
+    avg_error_arr = np.mean(Current_error, axis=(1, 2, 3))  # (arraySize, HRS%, modelSize)
+    jeong_avg_idx = [i for i, name in enumerate(enabled_models) if name.startswith("jeong_avg")]
+    best_arr_idx = np.argmin(avg_error_arr[:, :, jeong_avg_idx], axis=2)
+    best_k_arr = k_values[best_arr_idx]
 
+    # Compute heatmap for Rpar vs HRS%
+    avg_error_par = np.mean(Current_error, axis=(0, 2, 3))  # (parasiticResistance, HRS%, modelSize)
+    best_par_idx = np.argmin(avg_error_par[:, :, jeong_avg_idx], axis=2)
+    best_k_par = k_values[best_par_idx]
+
+    # Compute heatmap for HRS% vs Memory Window
+    avg_error_mw = np.mean(Current_error, axis=(0, 1, 3))  # (memorySize, HRS%, modelSize)
+    best_mw_idx = np.argmin(avg_error_mw[:, :, jeong_avg_idx], axis=2)
+    best_k_mw = k_values[best_mw_idx]
+
+    fig, axes = plt.subplots(1, 3, figsize=(24, 7))
+
+    im0 = axes[0].imshow(best_k_arr, origin='lower', aspect='auto',
+                        extent=[Rhrs_percentage[0], Rhrs_percentage[-1], array_size[0], array_size[-1]],
+                        cmap='viridis')
+    axes[0].set_xlabel("HRS%")
+    axes[0].set_ylabel("Array Size")
+    axes[0].set_title("Best k (Array Size vs HRS%)")
+    fig.colorbar(im0, ax=axes[0], label="k value")
+
+    im1 = axes[1].imshow(best_k_par, origin='lower', aspect='auto',
+                        extent=[Rhrs_percentage[0], Rhrs_percentage[-1], parasiticResistance[0], parasiticResistance[-1]],
+                        cmap='viridis')
+    axes[1].set_xlabel("HRS%")
+    axes[1].set_ylabel("Parasitic Resistance")
+    axes[1].set_title("Best k (Rpar vs HRS%)")
+    fig.colorbar(im1, ax=axes[1], label="k value")
+
+    im2 = axes[2].imshow(best_k_mw, origin='lower', aspect='auto',
+                        extent=[Rhrs_percentage[0], Rhrs_percentage[-1], memoryWindow[0], memoryWindow[-1]],
+                        cmap='viridis')
+    axes[2].set_xlabel("HRS%")
+    axes[2].set_ylabel("Memory Window")
+    axes[2].set_title("Best k (MW vs HRS%)")
+    fig.colorbar(im2, ax=axes[2], label="k value")
+
+    plt.tight_layout()
+    plt.show()

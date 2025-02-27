@@ -10,12 +10,13 @@ import seaborn as sns
 import numpy as np
 import time
 import glob
-from CrossbarModels.Crossbar_Models_pytorch import jeong_model, dmr_model, alpha_beta_model, Memtorch_model, crosssim_model, IdealModel
+from CrossbarModels.Crossbar_Models_pytorch import jeong_model, jeong_model_mod, dmr_model, alpha_beta_model, Memtorch_model, crosssim_model, IdealModel
 from NN_Crossbar.Crossbar_net import CustomNet, evaluate_model
 
 print("Available models:")
 available_models = {
     "jeong_model": jeong_model,
+    "jeong_model_mod": jeong_model_mod,
     "dmr_model": dmr_model,
     "alpha_beta_model": alpha_beta_model,
     "solve_passive_model": Memtorch_model,
@@ -30,8 +31,8 @@ selected_model_name = list(available_models.keys())[model_choice]
 selected_model_function = available_models[selected_model_name]
 
 parasiticResistance = float(input("Enter parasitic resistance value: "))
-R_lrs = float(input("Enter R_lrs value: "))
-R_hrs = float(input("Enter R_hrs value: "))
+R_lrs = 1000
+R_hrs = 40000
 max_array_size = int(input("Enter max_array_size value: "))
 quant_bits = 0
 
@@ -46,13 +47,19 @@ learning_rate = 0.002
 epochs = 20
 save_checkpoint = True
 Fix_positive_weights = True
-early_stop_acc = 97
+early_stop_acc = 99
 
-# Data loading and preprocessing - using normalization for stability
+# Data loading
 transform = transforms.Compose([
     transforms.ToTensor(),
-    transforms.Normalize((0.1307,), (0.3081,))
+    transforms.Lambda(lambda x: x / 2)  # Scale to [0,0.5]
 ])
+
+# # Data loading and preprocessing - using normalization for stability
+# transform = transforms.Compose([
+#     transforms.ToTensor(),
+#     transforms.Normalize((0.1307,), (0.3081,))
+# ])
 
 train_dataset = datasets.MNIST('./data', train=True, download=True, transform=transform)
 test_dataset = datasets.MNIST('./data', train=False, download=True, transform=transform)
@@ -168,7 +175,7 @@ for epoch in range(start_epoch, epochs):
         print(f'Model checkpoint saved at {checkpoint_path}')
 
     plt.clf()
-    plt.plot(range(1, epoch + 2), train_accuracies, marker='o', linestyle='-', color='b')
+    plt.plot(range(start_epoch + 1, epoch + 2), train_accuracies, marker='o', linestyle='-', color='b')
     plt.xlabel('Epoch')
     plt.ylabel('Training Accuracy (%)')
     plt.title('Training Accuracy Over Epochs')
