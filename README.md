@@ -113,6 +113,7 @@ python NN_Training.py
 - Command-line prompts allow setting parasitic resistance, HRS, tile size, etc.  
 - Additional parameters (LRS, quantization bits, training checkpoints) can be modified within the script.  
 - Trained models are saved in `TrainedModels/ModelName`.
+- For GPU acceleration make sure to install pythorch based on your specific cuda version
 
 <img src="assets/CrossSim_fc2.png" alt="Training Weights" width="1000">
 
