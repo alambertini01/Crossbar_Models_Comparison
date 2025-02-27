@@ -35,7 +35,7 @@ if __name__ == '__main__':
     plot_confusion = True
 
     batch_size = 64
-    test_samples = 100
+    test_samples = 1000
 
     # *************** Setup Device & Data ***************
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
