@@ -12,59 +12,30 @@ import csv
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 
-from CrossbarModels.Crossbar_Models_pytorch import jeong_model, dmr_model, alpha_beta_model, Memtorch_model, crosssim_model, IdealModel
+from CrossbarModels.Crossbar_Models_pytorch import jeong_model,jeong_model_mod, dmr_model, alpha_beta_model, Memtorch_model, crosssim_model, IdealModel
 from NN_Crossbar.Crossbar_net import CustomNet, evaluate_model
 
 if __name__ == '__main__':
     # *************** User Parameters ***************
-    # The code assumes the user picks a model from a folder structure as before
-    # You can hardcode choices if desired. For now, we keep user input for model selection.
+    # These parameters will be overridden by folder values if not explicitly set for sweeping
+    # Define default values (will be overridden by folder name values if available)
 
-    # Primary fixed parameters
-    R_lrs = 1e3
-    
-    parasitic_resistances = torch.arange(1, 4, 1).tolist()
-    max_array_size = 784
-    model_functions = [crosssim_model, jeong_model, dmr_model, alpha_beta_model, IdealModel]
-    bias_correction = True
+    R_lrs = None
+    parasitic_resistances = None
+    max_array_size = None
+    R_hrs_values = None
+    bits_values = [0]  # 0 for floating point software precision
+
+    # Other fixed parameters
+    model_functions = [crosssim_model, jeong_model_mod, jeong_model, IdealModel]
+    Fix_positive_inputs = False
+    bias_correction = False
     debug_plot = True
-    debug_index = 0
+    debug_index = 4
     plot_confusion = True
-    
-    batch_size=1
-    test_samples = 2
 
-    # Parameters to potentially sweep
-    # R_hrs_values = torch.linspace(20000, 60000, steps=10).tolist()
-    R_hrs_values = 40000
-    bits_values = 0         # 0 for floating point software precision
-
-    # *************** Determine Sweeps ***************
-    # Convert R_hrs_values and bits_values into lists if they aren't already
-    if not isinstance(R_hrs_values, list):
-        R_hrs_values = [R_hrs_values]
-    if not isinstance(bits_values, list):
-        bits_values = [bits_values]
-
-    # Only one of R_hrs_values or bits_values can have more than one element
-    if len(R_hrs_values) > 1 and len(bits_values) > 1:
-        raise ValueError("Only one parameter among R_hrs and bits can be swept. Both cannot be lists at the same time.")
-
-    # Identify which parameter (if any) is being swept
-    # If R_hrs_values has multiple elements, we sweep R_hrs
-    # If bits_values has multiple elements, we sweep bits
-    # If both have single element, no second sweep
-    if len(R_hrs_values) > 1:
-        sweeping_param = 'R_hrs'
-        param_values = R_hrs_values
-        fixed_bits = bits_values[0]
-    elif len(bits_values) > 1:
-        sweeping_param = 'bits'
-        param_values = bits_values
-        fixed_R_hrs = R_hrs_values[0]
-    else:
-        sweeping_param = None
-        param_values = [None]  # no sweep, just a dummy list
+    batch_size = 64
+    test_samples = 100
 
     # *************** Setup Device & Data ***************
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -92,16 +63,85 @@ if __name__ == '__main__':
         print("The specified weights file does not exist.")
         exit()
     weights = torch.load(weights_path, map_location=device)
+    
+    # Parse parameters from the folder name
+    folder_params = {}
+    param_parts = selected_rpar_folder.split('__')
+    for part in param_parts:
+        if part.startswith('Rpar'):
+            folder_params['parasitic_resistance'] = float(part[4:])
+        elif part.startswith('LRS'):
+            folder_params['R_lrs'] = int(part[3:])
+        elif part.startswith('HRS'):
+            folder_params['R_hrs'] = int(part[3:])
+        elif part.startswith('Size'):
+            folder_params['max_array_size'] = int(part[4:])
+    
+    print(f"Extracted parameters from folder: {folder_params}")
+    
+    # Set parameters from folder values if not already defined for sweeping
+    # Set parasitic_resistances
+    if parasitic_resistances is None:
+        if 'parasitic_resistance' in folder_params:
+            parasitic_resistances = [folder_params['parasitic_resistance']]
+        else:
+            parasitic_resistances = [3.0]  # Default value
 
+    # Set R_lrs
+    if R_lrs is None:
+        R_lrs = folder_params.get('R_lrs', 1000)  # Default to 1000 if not found
+    
+    # Set R_hrs_values
+    if R_hrs_values is None:
+        if 'R_hrs' in folder_params:
+            R_hrs_values = [folder_params['R_hrs']]
+        else:
+            R_hrs_values = [40000]  # Default value
+    
+    # Set max_array_size
+    if max_array_size is None:
+        max_array_size = folder_params.get('max_array_size', 64)  # Default to 64 if not found
+    
+    print(f"Using parameters: R_lrs={R_lrs}, R_hrs={R_hrs_values}, Rpar={parasitic_resistances}, Array Size={max_array_size}")
+    
+    # *************** Determine Sweeps ***************
+    # Convert R_hrs_values and bits_values into lists if they aren't already
+    if not isinstance(R_hrs_values, list):
+        R_hrs_values = [R_hrs_values]
+    if not isinstance(bits_values, list):
+        bits_values = [bits_values]
+    
+    # Only one of R_hrs_values or bits_values can have more than one element
+    if len(R_hrs_values) > 1 and len(bits_values) > 1:
+        raise ValueError("Only one parameter among R_hrs and bits can be swept. Both cannot be lists at the same time.")
+    
+    # Identify which parameter (if any) is being swept
+    if len(R_hrs_values) > 1:
+        sweeping_param = 'R_hrs'
+        param_values = R_hrs_values
+        fixed_bits = bits_values[0]
+    elif len(bits_values) > 1:
+        sweeping_param = 'bits'
+        param_values = bits_values
+        fixed_R_hrs = R_hrs_values[0]
+    else:
+        sweeping_param = None
+        param_values = [None]  # no sweep, just a dummy list
+        
+    print(f"Sweeping parameter: {sweeping_param}")
+    
+    # Continue with the rest of your code...
     # Data loading
-    transform = transforms.Compose([
-       transforms.ToTensor(),
-       transforms.Lambda(lambda x: x / 2)  # Scale to [0,0.5]
-    ])
-    # transform = transforms.Compose([
-    #     transforms.ToTensor(),
-    #     transforms.Normalize((0.1307,), (0.3081,))
-    # ])
+    if (Fix_positive_inputs):
+        transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Lambda(lambda x: x / 2)  # Scale to [0,0.5]
+        ])
+    else:
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.1307,), (0.3081,))
+        ])
 
     test_dataset = datasets.MNIST('./data', train=False, download=True, transform=transform)
     small_test_dataset = Subset(test_dataset, torch.arange(test_samples))
@@ -118,7 +158,9 @@ if __name__ == '__main__':
     # Colors for models
     colors = {
         'crosssim_model': 'blue',
+        'jeong_model_mod': 'purple',
         'jeong_model': 'cyan',
+        'Memtorch_model': 'orange',
         'alpha_beta_model': 'red',
         'dmr_model': 'green',
         'solve_passive_model': 'orange',

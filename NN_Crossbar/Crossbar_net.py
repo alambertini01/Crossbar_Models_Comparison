@@ -33,7 +33,8 @@ class CustomLayer(nn.Module):
             cond = weight_mapping(tile_weight, self.R_hrs, self.R_lrs)
 
         # Compute currents
-        Currents = self.model_function(cond, tile_x, self.parasiticResistance)
+        Extra_params = {'R_lrs': self.R_lrs, 'R_hrs': self.R_hrs}
+        Currents = self.model_function(cond, tile_x, self.parasiticResistance, **Extra_params)
 
         Currents_before_corr = Currents.detach().cpu()
 

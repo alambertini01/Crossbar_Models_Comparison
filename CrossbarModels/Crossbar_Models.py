@@ -38,9 +38,8 @@ class IdealModel(CrossbarModel):
 #                          ANALYTICAL MODELS                         #
 ######################################################################
 
-class JeongModel(CrossbarModel):
+class JeongModel_mod(CrossbarModel):
     def calculate(self, R, parasiticResistance, Potential, **kwargs):
-        
         input, output = R.shape
         # Precompute cumulative sums using cumsum
         weights = np.arange(output, 0, -1, dtype=float)
@@ -61,7 +60,7 @@ class JeongModel(CrossbarModel):
         return voltage_drops_jeong, current_jeong
 
 
-class JeongModel_avg(CrossbarModel):
+class JeongModel_k_fixed(CrossbarModel):
     def __init__(self, name, k = 0.95):
         super().__init__(name)
         self.k = k
@@ -95,7 +94,7 @@ class JeongModel_avg(CrossbarModel):
         return voltage_drops_jeong, current_jeong
     
 
-class JeongModel_adaptive(CrossbarModel):
+class JeongModel(CrossbarModel):
     def calculate(self, R, parasiticResistance, Potential, R_lrs, MW, Rhrs_percentage, **kwargs):
         
         k= np.interp(Rhrs_percentage, [10, 100], [1.3, 0.4])

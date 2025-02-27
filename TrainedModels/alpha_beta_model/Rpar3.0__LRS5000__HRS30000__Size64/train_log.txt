@@ -1,0 +1,14 @@
+Training Log
+Model: alpha_beta_model
+Parasitic Resistance: 3.0
+R_lrs: 5000.0
+R_hrs: 30000.0
+Max Array Size: 64
+Hidden Layer Size: 128
+Batch Size: 64
+Learning Rate: 0.002
+Epochs: 20
+Early Stop Accuracy: 97%
+Final Training Accuracy: 97.35%
+Test Accuracy: 96.13%
+Total Training Time (s): 514.0188

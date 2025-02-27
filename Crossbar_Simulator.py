@@ -17,7 +17,7 @@ from CrossbarModels.Functions.NonLinear import resistance_array_to_x
 from CrossbarModels.Functions.NonLinear import calculate_resistance
 #Import the Crossbar Models
 from CrossbarModels.Crossbar_Models import *
-from CrossbarModels.Crossbar_Models_pytorch import dmr_model, jeong_model, crosssim_model, alpha_beta_model
+from CrossbarModels.Crossbar_Models_pytorch import dmr_model, jeong_model, crosssim_model, alpha_beta_model, jeong_model_adaptive
 
 
 
@@ -32,11 +32,10 @@ k_values = np.arange(0.1, 1.0, 0.05)  # Generates [0.1, 0.15, 0.2, ..., 0.95]
 # Define Verr_th values for CrossSimModel
 Verr_th_values = [10**-i for i in range(1, 10)]  # Generates [1e-1, 1e-2, ..., 1e-9]
 Models = [
-    JeongModel("mod_Jeong"),
-    JeongModel_avg("Jeong_avg"),
-    JeongModel_adaptive("Jeong"),
-    *[JeongModel_avg(f"jeong_avg{k:.2f}".replace(".", "_"), k=k) for k in k_values],  # Dynamic Jeong_avg models
-    JeongModel_avg("Jeong_torch"),
+    JeongModel_mod("mod_Jeong"),
+    JeongModel("Jeong"),
+    *[JeongModel_k_fixed(f"jeong_avg{k:.2f}".replace(".", "_"), k=k) for k in k_values],  # Dynamic Jeong_avg models
+    JeongModel("Jeong_torch"),
     IdealModel("Ideal"),
     DMRModel("DMR_old"),
     DMRModel_acc("DMR"),
@@ -57,14 +56,14 @@ Models = [
 
 new_model_functions = {
     "DMR_torch": dmr_model,
-    "Jeong_torch": jeong_model,
+    "Jeong_torch": jeong_model_adaptive,
     "CrossSim_torch" : crosssim_model,
     "αβ-matrix_torch" : alpha_beta_model
 }
 
 
 # Enabled models
-enabled_models = ["Ideal", "αβ-matrix","Jeong"]
+enabled_models = ["Ideal", "αβ-matrix","Jeong","Jeong_torch"]
 # enabled_models += [f"jeong_avg{k:.2f}".replace(".", "_") for k in k_values]  # Append all Jeong_avg models
 
 # enabled_models = [ "Ideal","Jeong","Jeong_avg","jeong_avg1", "jeong_avg2", "jeong_avg3", "jeong_avg4", "jeong_avg5","jeong_avg6", "jeong_avg76", "jeong_avg8","jeong_avg9", "jeong_avg92", "jeong_avg95"]
@@ -78,11 +77,11 @@ R_lrs = 1000
 Rhrs_percentage=50
 # parasitic resistance value
 parasiticResistance = np.arange(0.1, 5.1, 0.1)
-# parasiticResistance = np.array([5])
+parasiticResistance = np.array([5])
 
 # Memory window (ratio between Hrs and Lrs)s
 memoryWindow = np.arange(5, 101, 2)
-# memoryWindow = np.array([20])
+memoryWindow = np.array([20])
 
 # Input voltages parameters
 v_On_percentage = 100
@@ -207,9 +206,11 @@ for m in range(memorySize):
                     # Check if model name corresponds to a pytorch function
                     if model.name in new_model_functions:
                         # Call the PyTorch function
+                        Extra_params = {'X': X[z,m,v], 'S': S[z,m,v]} if model.name == 'NgSpiceNonLinear' else {'R_lrs': R_lrs, 'R_hrs':memoryWindow[m]*R_lrs}
+                        
                         start_time = time.perf_counter()
                         with torch.no_grad():
-                            out_curr_torch = new_model_functions[model.name](weight_tensor, x_tensor, parasiticResistance[z])
+                            out_curr_torch = new_model_functions[model.name](weight_tensor, x_tensor, parasiticResistance[z], **Extra_params)
                         end_time = time.perf_counter()
 
                         out_curr_np = out_curr_torch.squeeze(0).numpy() # (output,)
