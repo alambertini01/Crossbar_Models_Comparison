@@ -26,7 +26,7 @@ def jeong_model_mod(weight, x, parasiticResistance, **kwargs):
     return current_jeong
 
 
-def jeong_model(weight, x, parasiticResistance, R_lrs, R_hrs, k=0.6, epsilon=1e-10):
+def jeong_model(weight, x, parasiticResistance, R_lrs, R_hrs, k=0.2, epsilon=1e-10):
 
     device = weight.device
     dtype = weight.dtype
