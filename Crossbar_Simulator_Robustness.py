@@ -1,3 +1,5 @@
+# Use this script to compare the robustness of different parasitc resistance corsbar models (sweep of 5 parameters)
+
 import os
 import random
 import numpy as np
@@ -50,7 +52,7 @@ Models = [
 ############################ PARAMETERS ##############################
 
 # Enabled models
-enabled_models = ["Ideal", "Jeong", "MW_Jeong", "DMR", "αβ-matrix"]
+enabled_models = ["Ideal", "Jeong", "DMR", "αβ-matrix"]
 # enabled_models += [f"jeong_avg{k:.2f}".replace(".", "_") for k in k_values]  # Append all Jeong_avg models
 
 reference_model = "CrossSim"

@@ -19,7 +19,7 @@ available_models = {
     "jeong_model_mod": jeong_model_mod,
     "dmr_model": dmr_model,
     "alpha_beta_model": alpha_beta_model,
-    "solve_passive_model": Memtorch_model,
+    "Memtorch_model": Memtorch_model,
     "crosssim_model": crosssim_model,
     "IdealModel": IdealModel
 }

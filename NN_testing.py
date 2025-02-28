@@ -21,21 +21,21 @@ if __name__ == '__main__':
     # Define default values (will be overridden by folder name values if available)
 
     R_lrs = None
-    parasitic_resistances = None
+    parasitic_resistances = [1.0, 2.0, 3.0, 4.0]
     max_array_size = None
     R_hrs_values = None
     bits_values = [0]  # 0 for floating point software precision
 
     # Other fixed parameters
-    model_functions = [crosssim_model, jeong_model_mod, jeong_model, IdealModel]
-    Fix_positive_inputs = True
+    model_functions = [crosssim_model, IdealModel]
+    Fix_positive_inputs = False
     bias_correction = False
-    debug_plot = True
+    debug_plot = False
     debug_index = 4
     plot_confusion = True
 
     batch_size = 64
-    test_samples = 1000
+    test_samples = 300
 
     # *************** Setup Device & Data ***************
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

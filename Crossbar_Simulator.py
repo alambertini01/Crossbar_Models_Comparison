@@ -24,7 +24,7 @@ from CrossbarModels.Crossbar_Models_pytorch import dmr_model, jeong_model, cross
 ############################ PARAMETERS ##############################
 
 # Dimensions of the crossbar
-input,output = (48,48)
+input,output = (64,64)
 
 # Initialize each model instance
 # Define k values using numpy arange
@@ -70,7 +70,7 @@ enabled_models = ["Ideal", "αβ-matrix","Jeong"]
 # enabled_models = [ "Ideal","Jeong","DMR","αβ-matrix","CrossSim1","CrossSim2", "CrossSim3", "CrossSim4", "CrossSim5", "CrossSim6", "CrossSim7", "CrossSim8", "Memtorch", "NgSpice"]
 # enabled_models = [model.name for model in Models]
 
-reference_model =  "CrossSim9"
+reference_model =  "CrossSim"
 
 # Low resistance proggramming value
 R_lrs = 1000
@@ -92,7 +92,7 @@ Metric_type = 1
 
 # Variability parameters
 v_flag = 0
-v_size = 200
+v_size = 50
 
 
 ############################ INITIALIZATIONS ############################
