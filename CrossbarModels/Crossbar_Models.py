@@ -9,8 +9,11 @@ from .Functions.Spice_Functions import Create_NonLinear_Structure
 #Import NonLinear functions
 from .Functions.NonLinear import create_rram_model
 # Import Memtorch Solver
-from .Models.MemTorch_float import memtorch_bindings as memtorch_bindings_float # type: ignore
-from .Models import memtorch_bindings# type: ignore
+try:
+    from .Models.MemTorch_float import memtorch_bindings as memtorch_bindings_float # type: ignore
+    from .Models import memtorch_bindings# type: ignore
+except ImportError as e:
+    print(f"Warning: Could not import memtorch_bindings: {e}")
 # Import CrossSim Solver
 from .Models.CrossSimModel import CrossSim_Solve
 

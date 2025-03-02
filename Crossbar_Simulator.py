@@ -17,14 +17,14 @@ from CrossbarModels.Functions.NonLinear import resistance_array_to_x
 from CrossbarModels.Functions.NonLinear import calculate_resistance
 #Import the Crossbar Models
 from CrossbarModels.Crossbar_Models import *
-from CrossbarModels.Crossbar_Models_pytorch import dmr_model, jeong_model, crosssim_model, alpha_beta_model, jeong_model_adaptive
+from CrossbarModels.Crossbar_Models_pytorch import dmr_model, jeong_model, crosssim_model, alpha_beta_model, jeong_model_mod
 
 
 
 ############################ PARAMETERS ##############################
 
 # Dimensions of the crossbar
-input,output = (32,32)
+input,output = (64,64)
 
 # Initialize each model instance
 # Define k values using numpy arange
@@ -56,14 +56,14 @@ Models = [
 
 new_model_functions = {
     "DMR_torch": dmr_model,
-    "Jeong_torch": jeong_model_adaptive,
+    "Jeong_torch": jeong_model,
     "CrossSim_torch" : crosssim_model,
     "αβ-matrix_torch" : alpha_beta_model
 }
 
 
 # Enabled models
-enabled_models = ["Ideal", "αβ-matrix","Jeong","Jeong_torch"]
+enabled_models = ["Ideal", "αβ-matrix","Jeong"]
 # enabled_models += [f"jeong_avg{k:.2f}".replace(".", "_") for k in k_values]  # Append all Jeong_avg models
 
 # enabled_models = [ "Ideal","Jeong","Jeong_avg","jeong_avg1", "jeong_avg2", "jeong_avg3", "jeong_avg4", "jeong_avg5","jeong_avg6", "jeong_avg76", "jeong_avg8","jeong_avg9", "jeong_avg92", "jeong_avg95"]
@@ -77,11 +77,11 @@ R_lrs = 1000
 Rhrs_percentage=50
 # parasitic resistance value
 parasiticResistance = np.arange(0.1, 5.1, 0.1)
-parasiticResistance = np.array([5])
+#parasiticResistance = np.array([5])
 
 # Memory window (ratio between Hrs and Lrs)s
-memoryWindow = np.arange(5, 101, 2)
-memoryWindow = np.array([20])
+memoryWindow = np.arange(2, 50, 2)
+#memoryWindow = np.array([20])
 
 # Input voltages parameters
 v_On_percentage = 100
@@ -92,7 +92,7 @@ Metric_type = 1
 
 # Variability parameters
 v_flag = 0
-v_size = 100
+v_size = 50
 
 
 ############################ INITIALIZATIONS ############################

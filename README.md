@@ -27,7 +27,7 @@ A comprehensive tool for modeling and analyzing parasitic effects in crossbar ar
 
 - **Parametric Analysis**  
   \- Adjustable array sizes.  
-  \- Configurable parasitic resistance values, memory window ratios (HRS/LRS), and device non-linearities.  
+  \- Configurable parasitic resistance values and memory window ratios (HRS/LRS).  
   \- Tunable sparsity levels (% of HRS devices).  
   \- Device variability for realistic crossbar simulation.  
 
@@ -113,6 +113,7 @@ python NN_Training.py
 - Command-line prompts allow setting parasitic resistance, HRS, tile size, etc.  
 - Additional parameters (LRS, quantization bits, training checkpoints) can be modified within the script.  
 - Trained models are saved in `TrainedModels/ModelName`.
+- For GPU acceleration make sure to install pytorch based on your specific cuda version.
 
 <img src="assets/CrossSim_fc2.png" alt="Training Weights" width="1000">
 
