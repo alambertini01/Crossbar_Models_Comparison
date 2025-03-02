@@ -20,4 +20,5 @@ venv/
 *.ipynb_checkpoints
 Crossbar_Simulator_ArraySize_Sweep_work_point.py
 Crossbar_Simulator_ArraySize_Sweep.py
+Trained_weights_distributions_plot.py
 NN_Training_gif.py
