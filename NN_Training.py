@@ -44,7 +44,7 @@ print(f"Using device: {device}")
 hiddenLayer = 128
 batch_size = 64
 learning_rate = 0.002
-epochs = 50
+epochs = 20
 save_checkpoint = True
 Fix_positive_weights = True
 Fix_positive_inputs = False
@@ -139,8 +139,8 @@ for epoch in range(start_epoch, epochs):
     model.train()
     train_loss = 0
     correct = 0
-
-    for data, target in train_loader:
+    
+    for batch_idx, (data, target) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
 
         output = model(data)
@@ -159,6 +159,9 @@ for epoch in range(start_epoch, epochs):
         train_loss += loss.item()
         pred = output.argmax(dim=1, keepdim=True)
         correct += pred.eq(target.view_as(pred)).sum().item()
+        
+        if batch_idx % 100 == 0:
+            print(f'Epoch: {epoch + 1} [{batch_idx}/{len(train_loader)}], Loss: {loss.item():.4f}, Running Acc: {100. * correct / ((batch_idx+1) * batch_size):.2f}%')
 
     train_loss /= len(train_loader.dataset)
     train_accuracy = 100. * correct / len(train_loader.dataset)
