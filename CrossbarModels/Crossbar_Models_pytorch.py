@@ -310,8 +310,8 @@ def crosssim_model(weight, x, parasiticResistance, Verr_th=1e-2, hide_convergenc
         dV = dV0.clone()  # Initial device voltages
 
         # Use alpha_beta model to get a better initial guess for dV
-        dV_alpha_beta = alpha_beta_model(matrix, vector[0,:].unsqueeze(0), parasiticResistance, return_voltages=True) # use first batch input as representative for alpha-beta and get voltages
-        dV = dV_alpha_beta # Initialize dV with voltage drops from alpha-beta model
+        # dV_alpha_beta = alpha_beta_model(matrix, vector[0,:].unsqueeze(0), parasiticResistance, return_voltages=True) # use first batch input as representative for alpha-beta and get voltages
+        # dV = dV_alpha_beta # Initialize dV with voltage drops from alpha-beta model
 
         Ires = dV * matrix.unsqueeze(0)  # Initial currents, shape: (batch_size, input_dim, output_dim)
 
@@ -352,7 +352,7 @@ def crosssim_model(weight, x, parasiticResistance, Verr_th=1e-2, hide_convergenc
 
     solved, retry = False, False
     input_size, output_size = weight.shape
-    initial_gamma = min(0.9, 1000 / (input_size + output_size) / parasiticResistance)  # Save the initial gamma
+    initial_gamma = min(0.9, 50 / (input_size + output_size) / parasiticResistance)  # Save the initial gamma
     gamma = initial_gamma
 
     while not solved:
