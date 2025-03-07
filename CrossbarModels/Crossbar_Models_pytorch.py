@@ -29,7 +29,7 @@ def jeong_model_mod(weight, x, parasiticResistance, **kwargs):
     return current_jeong
 
 
-def jeong_model(weight, x, parasiticResistance, R_lrs, R_hrs, k=0.6, epsilon=1e-10):
+def jeong_model(weight, x, parasiticResistance, R_lrs, R_hrs, k=0.2, epsilon=1e-10):
 
     device = weight.device
     dtype = weight.dtype
@@ -67,7 +67,7 @@ def jeong_model(weight, x, parasiticResistance, R_lrs, R_hrs, k=0.6, epsilon=1e-
 
 def dmr_model(weight: torch.Tensor, x: torch.Tensor, parasiticResistance: float, **kwargs):
     """
-    PyTorch adaptation of DMRModel_new for batched inputs.
+    PyTorch adaptation of DMRModel_acc for batched inputs.
     Computes only the current (no voltage-drop output).
     
     Parameters
@@ -147,27 +147,31 @@ def dmr_model(weight: torch.Tensor, x: torch.Tensor, parasiticResistance: float,
 
 
 
-def alpha_beta_model(weight, x, parasiticResistance, **kwargs):
+def alpha_beta_model(weight, x, parasiticResistance, return_voltages=False, **kwargs):
     """
     PyTorch adaptation of the alpha-beta model for batched inputs.
+    Can return either output currents (2D) or voltage drops (3D) based on flag.
 
     Parameters
     ----------
     weight : torch.Tensor
         The conductance matrix of shape (input_size, output_size).
     x : torch.Tensor
-        The batched input voltages of shape (batch_size, input_size).
+        The batched input voltages of shape (batch_size, input_size). Assumed to be batch_size=1 and input_size.
     parasiticResistance : float
         The parasitic resistance value (used to compute parasitic conductances g_bit, g_word).
+    return_voltages : bool, optional
+        If True, returns voltage drops (3D tensor). If False (default), returns output currents (2D tensor).
 
     Returns
     -------
-    current_gamma : torch.Tensor
-        Output currents of shape (batch_size, output_size).
+    current_gamma : torch.Tensor or dV_alpha_beta : torch.Tensor
+        Output currents of shape (batch_size, output_size) if return_voltages is False.
+        Voltage drops of shape (batch_size, input_size, output_size) if return_voltages is True.
     """
 
     # weight is our G matrix of shape (input_size, output_size)
-    # x is our input of shape (batch_size, input_size)
+    # x is our input of shape (batch_size, input_size). Here we expect x to be (1, input_size)
 
     device = weight.device
     dtype = weight.dtype
@@ -182,14 +186,13 @@ def alpha_beta_model(weight, x, parasiticResistance, **kwargs):
     G = weight
 
     # To mimic the original code's "I = G * np.max(Potential)",
-    # we'll take the maximum value over the entire batch+input dimension.
-    # (This follows the original logic, which took a single max from Potential.)
-    max_input = x.max()  # scalar
+    # we'll take the maximum value from the input x (assuming batch_size=1).
+    max_input = x.max()  # scalar if x is (1, input_size) or (input_size,)
     I = G * max_input  # shape: (input_size, output_size)
 
     # ---------------------------------------------------------------------
     # 1) Compute the column-wise cumsums (for alpha)
-    #    cumsumI_cols and cumsumK_I_cols both have shape (input_size+1, output_size).
+    #    cumsumI_cols and cumsumK_I_cols both have shape (input_size+1, output_size).
     # ---------------------------------------------------------------------
     cumsumI_cols = torch.zeros(input_size + 1, output_size, device=device, dtype=dtype)
     cumsumK_I_cols = torch.zeros(input_size + 1, output_size, device=device, dtype=dtype)
@@ -199,23 +202,13 @@ def alpha_beta_model(weight, x, parasiticResistance, **kwargs):
     i2D = torch.arange(input_size, device=device, dtype=dtype).unsqueeze(1)  # shape: (input_size, 1)
     cumsumK_I_cols[1:] = torch.cumsum(i2D * I, dim=0)
 
-    # denomSum = input_size * cumsumI_cols[input_size, :] - cumsumK_I_cols[input_size, :]
-    # shape: (output_size,)
     denomSum = input_size * cumsumI_cols[input_size, :] - cumsumK_I_cols[input_size, :]
 
-    # ---------------------------------------------------------------------
-    # 2) Compute alpha_gm
-    #    Note that topAlpha is broadcast to shape (input_size, output_size),
-    #    and botAlpha is (output_size,), so final alpha_gm is (input_size, output_size).
-    # ---------------------------------------------------------------------
-    # topAlpha = I[0, :] * g_bit + G[0, :] * (i2D * cumsumI_cols[:input_size, :] - cumsumK_I_cols[:input_size, :])
-    # Because i2D has shape (input_size,1), (i2D*cumsumI_cols[:...]) is (input_size, output_size).
     topAlpha = (
         I[0, :] * g_bit
         + G[0, :] * (i2D * cumsumI_cols[:input_size, :] - cumsumK_I_cols[:input_size, :])
     )
 
-    # botAlpha = I[0, :] * g_bit + G[0, :] * denomSum  # shape: (output_size,)
     botAlpha = (
         I[0, :] * g_bit
         + G[0, :] * denomSum
@@ -223,10 +216,6 @@ def alpha_beta_model(weight, x, parasiticResistance, **kwargs):
 
     alpha_gm = topAlpha / botAlpha  # broadcasting -> shape: (input_size, output_size)
 
-    # ---------------------------------------------------------------------
-    # 3) Compute the row-wise cumsums (for beta)
-    #    cumsumI_rows and cumsumP_I_rows both have shape (input_size, output_size+1).
-    # ---------------------------------------------------------------------
     cumsumI_rows = torch.zeros(input_size, output_size + 1, device=device, dtype=dtype)
     cumsumP_I_rows = torch.zeros(input_size, output_size + 1, device=device, dtype=dtype)
 
@@ -242,36 +231,27 @@ def alpha_beta_model(weight, x, parasiticResistance, **kwargs):
     cPI_end = cumsumP_I_rows[:, -1]  # shape: (input_size,)
     cI_end = cumsumI_rows[:, -1]     # shape: (input_size,)
 
-    # denomBeta = I_colEnd * g_word + G_colEnd * (cPI_end + cI_end)
-    # shape: (input_size,)
     denomBeta = I_colEnd * g_word + G_colEnd * (cPI_end + cI_end)
 
-    # ---------------------------------------------------------------------
-    # 4) Compute beta_gm
-    #    partialSumBeta is shape (input_size, output_size).
-    # ---------------------------------------------------------------------
     j2D = j_vals.unsqueeze(0)  # shape: (1, output_size)
-    # partialSumBeta = ( (cPI_end[:, None] - cumsumP_I_rows[:, :output_size])
-    #                  - j2D * (cI_end[:, None] - cumsumI_rows[:, :output_size]) )
     partialSumBeta = (
         (cPI_end.unsqueeze(1) - cumsumP_I_rows[:, :output_size])
         - j2D * (cI_end.unsqueeze(1) - cumsumI_rows[:, :output_size])
     )
 
-    # numBeta = I_colEnd[:, None] * g_word + G_colEnd[:, None] * partialSumBeta
-    # shape: (input_size, output_size)
     numBeta = I_colEnd.unsqueeze(1) * g_word + G_colEnd.unsqueeze(1) * partialSumBeta
+    # shape: (input_size, output_size)
 
     beta_gm = numBeta / denomBeta.unsqueeze(1)  # shape: (input_size, output_size)
 
-    # ---------------------------------------------------------------------
-    # 5) Compute final currents for each batch:
-    #    current_gamma = x @ (alpha_gm * G * beta_gm)
-    #    => shape: (batch_size, output_size)
-    # ---------------------------------------------------------------------
-    current_gamma = x @ (alpha_gm * G * beta_gm)
+    if return_voltages:
+        # Compute voltage drops: dV_alpha_beta of shape (batch_size, input_size, output_size)
+        dV_alpha_beta = x.unsqueeze(2).expand(-1, input_size, output_size) * (alpha_gm * beta_gm).unsqueeze(0)
+        return dV_alpha_beta
+    else:
 
-    return current_gamma
+        current_gamma = x @ (alpha_gm * G * beta_gm)
+        return current_gamma
 
 
 
@@ -328,7 +308,13 @@ def crosssim_model(weight, x, parasiticResistance, Verr_th=1e-2, hide_convergenc
         # Initial estimate of device voltages and currents
         dV0 = vector.unsqueeze(2).expand(batch_size, input_dim, output_dim)  # Shape: (batch_size, input_dim, output_dim)
         dV = dV0.clone()  # Initial device voltages
+
+        # Use alpha_beta model to get a better initial guess for dV
+        dV_alpha_beta = alpha_beta_model(matrix, vector[0,:].unsqueeze(0), parasiticResistance, return_voltages=True) # use first batch input as representative for alpha-beta and get voltages
+        dV = dV_alpha_beta # Initialize dV with voltage drops from alpha-beta model
+
         Ires = dV * matrix.unsqueeze(0)  # Initial currents, shape: (batch_size, input_dim, output_dim)
+
 
         # Iteratively calculate parasitics and update device currents
         while Verr > Verr_th and Niters < Niters_max:
@@ -366,7 +352,7 @@ def crosssim_model(weight, x, parasiticResistance, Verr_th=1e-2, hide_convergenc
 
     solved, retry = False, False
     input_size, output_size = weight.shape
-    initial_gamma = min(0.9, 20 / (input_size + output_size) / parasiticResistance)  # Save the initial gamma
+    initial_gamma = min(0.9, 2000 / (input_size + output_size) / parasiticResistance)  # Save the initial gamma
     gamma = initial_gamma
 
     while not solved:
@@ -393,4 +379,3 @@ def crosssim_model(weight, x, parasiticResistance, Verr_th=1e-2, hide_convergenc
         )
 
     return result
-
