@@ -63,36 +63,36 @@ new_model_functions = {
 
 
 # Enabled models
-enabled_models = ["Ideal", "αβ-matrix","Jeong"]
+enabled_models = ["αβ-matrix","Jeong","DMR"]
 # enabled_models += [f"jeong_avg{k:.2f}".replace(".", "_") for k in k_values]  # Append all Jeong_avg models
 
 # enabled_models = [ "Ideal","Jeong","Jeong_avg","jeong_avg1", "jeong_avg2", "jeong_avg3", "jeong_avg4", "jeong_avg5","jeong_avg6", "jeong_avg76", "jeong_avg8","jeong_avg9", "jeong_avg92", "jeong_avg95"]
 # enabled_models = [ "Ideal","Jeong","DMR","αβ-matrix","CrossSim1","CrossSim2", "CrossSim3", "CrossSim4", "CrossSim5", "CrossSim6", "CrossSim7", "CrossSim8", "Memtorch", "NgSpice"]
 # enabled_models = [model.name for model in Models]
 
-reference_model =  "CrossSim"
+reference_model =  "NgSpice"
 
 # Low resistance proggramming value
 R_lrs = 1000
 Rhrs_percentage=50
 # parasitic resistance value
-parasiticResistance = np.arange(0.1, 5.1, 0.1)
-#parasiticResistance = np.array([5])
+# parasiticResistance = np.arange(0.1, 5.1, 0.1)
+parasiticResistance = np.array([1,3])
 
 # Memory window (ratio between Hrs and Lrs)s
-memoryWindow = np.arange(2, 50, 2)
-#memoryWindow = np.array([20])
+# memoryWindow = np.arange(2, 50, 2)
+memoryWindow = np.array([30])
 
 # Input voltages parameters
 v_On_percentage = 100
-population = [0.5, 0.0]
+population = [0.3, 0.0]
 
 # Metric type (2=Current*Times, 1=Current, 0=Voltage)
 Metric_type = 1
 
 # Variability parameters
 v_flag = 0
-v_size = 50
+v_size = 1
 
 
 ############################ INITIALIZATIONS ############################
@@ -413,19 +413,56 @@ for z in range(np.size(parasiticResistance)):
         figure1.show()
 
     if Absolute_current_plots:
-        # Second figure: Absolute current plots 
-        figure2, axis2 = plt.subplots(1, memorySize, figsize=(10, 5))  # Create a single row of subplots
+        # Revised Absolute Current Plot in mA with MRE annotation.
+        # Non-reference models use small markers, while the reference model is plotted with no markers and a dashed line.
+        figure2, axis2 = plt.subplots(1, memorySize, figsize=(7, 5))
         if memorySize == 1:
-            axis2 = np.array([axis2])  # Ensure axis2[0] structure for single column case
+            axis2 = np.array([axis2])  # Ensure axis2 is always an array
+
         for m in range(memorySize):
-            for index, model in enumerate(enabled_models):
-                axis2[m].plot(x, output_currents[:, z, m, index], color=colors[index % len(colors)], label=(model))
-                axis2[m].set_title(f"Output currents  (MW = {memoryWindow[m]}, Rpar = {parasiticResistance[z]} Ohm)"+ '\n'+array_size_string)
-                axis2[m].set(xlabel='jth bit line', ylabel='Current [A]')
-                axis2[m].legend()
+            # Build a list of (model_index, model_name, MRE) for non-reference models.
+            non_ref_models = [(i, enabled_models[i], Current_error[z, m, i])
+                            for i in range(len(enabled_models)) if enabled_models[i] != reference_model]
+            # Sort non-reference models in descending order of MRE.
+            non_ref_models_sorted = sorted(non_ref_models, key=lambda x: x[2], reverse=True)
+            # Append the reference model (MRE always 0) at the end.
+            ref_idx = enabled_models.index(reference_model)
+            ref_tuple = (ref_idx, reference_model, 0.0)
+            plot_order = non_ref_models_sorted + [ref_tuple]
+
+            for j, (i, model, mre_value) in enumerate(plot_order):
+                # Convert output currents from A to mA.
+                current_mA = output_currents[:, z, m, i] * 1e3
+                # Build label: include MRE for non-reference models only.
+                label = f"{model} (MRE: {mre_value:.2f}%)" if model != reference_model else model
+                if model == reference_model:
+                    # Plot reference model with no markers and a dashed line.
+                    axis2[m].plot(x, current_mA, color=colors[i % len(colors)],
+                                linestyle='--', linewidth=2,
+                                label=label)
+                else:
+                    # Plot non-reference models with small markers.
+                    axis2[m].plot(x, current_mA, color=colors[i % len(colors)],
+                                linestyle='-', marker='o', markersize=4, linewidth=2,
+                                label=label)
+
+            axis2[m].set_xlabel('BL number')
+            axis2[m].set_ylabel('Output Current [mA]')
+            axis2[m].legend()
+            axis2[m].grid(True)
+
+            # Add a text annotation on the figure background (below the models legend)
+            figure2.text(0.12, 0.18, f"{array_size_string}\nMemory Window: {memoryWindow[-1]}\nParasitic Resistance: {parasiticResistance[z]} Ω",
+                        ha='left', va='bottom', fontsize='small', color='black',
+                        bbox=dict(facecolor='none', edgecolor='none'))
+
         figure2.tight_layout()
         figure2.savefig(folder + f'/Figure2_Absolute_Current{z}.png')
-        figure2.show()
+        plt.show()
+
+
+
+
 
 
 if Voltage_drops_plot:
