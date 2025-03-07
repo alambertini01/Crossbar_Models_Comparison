@@ -24,7 +24,7 @@ if __name__ == '__main__':
     parasitic_resistances = [1.0, 2.0, 3.0, 4.0]
     max_array_size = None
     R_hrs_values = None
-    bits_values = [0]  # 0 for floating point software precision
+    bits_values = [5]  # 0 for floating point software precision
 
     # Other fixed parameters
     model_functions = [crosssim_model, IdealModel]
@@ -130,7 +130,6 @@ if __name__ == '__main__':
         
     print(f"Sweeping parameter: {sweeping_param}")
     
-    # Continue with the rest of your code...
     # Data loading
     if (Fix_positive_inputs):
         transform = transforms.Compose([
