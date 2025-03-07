@@ -352,7 +352,7 @@ def crosssim_model(weight, x, parasiticResistance, Verr_th=1e-2, hide_convergenc
 
     solved, retry = False, False
     input_size, output_size = weight.shape
-    initial_gamma = min(0.9, 2000 / (input_size + output_size) / parasiticResistance)  # Save the initial gamma
+    initial_gamma = min(0.9, 1000 / (input_size + output_size) / parasiticResistance)  # Save the initial gamma
     gamma = initial_gamma
 
     while not solved:
