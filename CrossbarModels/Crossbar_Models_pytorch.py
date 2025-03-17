@@ -255,6 +255,33 @@ def alpha_beta_model(weight, x, parasiticResistance, return_voltages=False, **kw
 
 
 
+def Fused_DMR_Jeong(weight, x, parasiticResistance, R_lrs, R_hrs, k=0.2, epsilon=1e-10):
+
+    # Get currents from both models
+    current_jeong = jeong_model(weight, x, parasiticResistance, R_lrs, R_hrs, k, epsilon)
+    current_dmr = dmr_model(weight, x, parasiticResistance)
+
+    # Calculate array size for weighting
+    input_size, output_size = weight.shape
+    array_size = input_size + output_size
+
+    # Define tau for the charging exponential
+    tau = 160  # Adjusted tau to get ~63% at array_size 160
+
+    # Calculate weights using charging exponential
+    weight_jeong_model = 1.0 - torch.exp(torch.tensor(-array_size / tau))
+    weight_dmr_model = 1.0 - weight_jeong_model # or torch.exp(torch.tensor(-array_size / tau))
+
+    # Ensure weights are on the same device as currents if needed, though scalar weights usually broadcast well.
+    weight_jeong_model = weight_jeong_model.to(current_jeong.device)
+    weight_dmr_model = weight_dmr_model.to(current_dmr.device)
+
+    # Perform weighted average
+    fused_current = weight_dmr_model * current_dmr + weight_jeong_model * current_jeong
+
+    return fused_current
+
+
 # Memtorch solve_passive model
 # Uses memtorch_bindings to solve passive networks and obtain voltage drops and currents
 def Memtorch_model(weight, x, parasiticResistance, **kwargs):
@@ -279,7 +306,7 @@ def IdealModel(weight, x, parasiticResistance, **kwargs):
 
 # CrossSim model implementation
 # Iteratively solves for voltage and current using parasitic resistance
-def crosssim_model(weight, x, parasiticResistance, Verr_th=1e-2, hide_convergence_msg=0, **kwargs):
+def crosssim_model(weight, x, parasiticResistance, Verr_th=1e-3, hide_convergence_msg=0, **kwargs):
     """
     Wrapper that implements a convergence loop around the circuit solver using PyTorch.
     Each solver uses successive under-relaxation.

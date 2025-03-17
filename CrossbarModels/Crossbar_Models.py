@@ -219,7 +219,8 @@ class alpha_beta(CrossbarModel):
 
         input, output = R.shape
         G = np.reciprocal(R)
-        I = G * np.max(Potential)
+        V_a_matrix = np.tile(Potential.reshape(-1, 1), output)
+        I = G * V_a_matrix
         # Initialize alpha and beta matrices
         alpha_gm = np.zeros((input, output))
         beta_gm = np.zeros((input, output))

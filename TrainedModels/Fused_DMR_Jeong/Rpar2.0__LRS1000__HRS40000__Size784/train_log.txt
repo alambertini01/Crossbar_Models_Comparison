@@ -1,5 +1,5 @@
 Training Log
-Model: crosssim_model
+Model: Fused_DMR_Jeong
 Parasitic Resistance: 2.0
 R_lrs: 1000
 R_hrs: 40000
@@ -9,6 +9,6 @@ Batch Size: 64
 Learning Rate: 0.002
 Epochs: 100
 Early Stop Accuracy: 97%
-Final Training Accuracy: 83.98%
-Test Accuracy: 82.88%
-Total Training Time (s): 12717.0862
+Final Training Accuracy: 95.77%
+Test Accuracy: 93.03%
+Total Training Time (s): 3706.1658

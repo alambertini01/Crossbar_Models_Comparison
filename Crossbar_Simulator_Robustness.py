@@ -789,8 +789,8 @@ for config in plot_configs:
 ###################### 3) Error vs Different Data #####################
 data_types = ['array_size', 'parasiticResistance', 'memoryWindow', 'variability', 'sparsity']
 data_arrays = [array_size, parasiticResistance, memoryWindow, np.arange(variabilitySize), Rhrs_percentage]
-labels = ['Array Size', 'Parasitic Resistance', 'Memory Window', 'Variability Index', 'Hrs Percentage']
-error_labels = [error_label] * len(data_types)
+labels = ['Array Size (nxn)', 'Parasitic Resistance (Ω)', 'Memory Window', 'Variability Index', 'Sparsity (HRS%)']
+error_labels = ["Mean Relative Error (%)"] * len(data_types)
 
 for i, (data_type, data_vals, label, err_lbl) in enumerate(zip(data_types, data_arrays, labels, error_labels)):
     if len(data_vals) > 1:
@@ -798,7 +798,7 @@ for i, (data_type, data_vals, label, err_lbl) in enumerate(zip(data_types, data_
         error_vs_data = np.mean(Metric, axis=tuple(j for j in range(5) if j != i))
         variance_vs_data = np.mean(Metric_variance, axis=tuple(j for j in range(5) if j != i))
 
-        fig, ax = plt.subplots(figsize=(12, 7))
+        fig, ax = plt.subplots(figsize=(5,4))
         for j, (model_name, color, marker) in enumerate(zip(enabled_models[:-1], model_colors, markers)):
             if j == 0 and not show_first_model:
                 continue
@@ -815,7 +815,6 @@ for i, (data_type, data_vals, label, err_lbl) in enumerate(zip(data_types, data_
             )
         ax.set_xlabel(label)
         ax.set_ylabel(err_lbl)
-        ax.set_title(f'Model Normalized Error vs {label}')
         ax.legend()
         ax.grid(True, which="both", linestyle='--', linewidth=0.5)
         fig.tight_layout()

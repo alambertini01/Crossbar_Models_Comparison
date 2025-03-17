@@ -10,7 +10,7 @@ import seaborn as sns
 import numpy as np
 import time
 import glob
-from CrossbarModels.Crossbar_Models_pytorch import jeong_model, jeong_model_mod, dmr_model, alpha_beta_model, Memtorch_model, crosssim_model, IdealModel
+from CrossbarModels.Crossbar_Models_pytorch import jeong_model, jeong_model_mod, dmr_model, alpha_beta_model, Memtorch_model, crosssim_model, IdealModel, Fused_DMR_Jeong
 from NN_Crossbar.Crossbar_net import CustomNet, evaluate_model
 
 print("Available models:")
@@ -21,7 +21,8 @@ available_models = {
     "alpha_beta_model": alpha_beta_model,
     "Memtorch_model": Memtorch_model,
     "crosssim_model": crosssim_model,
-    "IdealModel": IdealModel
+    "IdealModel": IdealModel,
+    "Fused_DMR_Jeong": Fused_DMR_Jeong
 }
 for i, model_name in enumerate(available_models.keys()):
     print(f"{i}: {model_name}")
@@ -49,6 +50,7 @@ save_checkpoint = True
 Fix_positive_weights = True
 Fix_positive_inputs = False
 early_stop_acc = 97
+print_batches = 100
 
 # Data loading
 if (Fix_positive_inputs):
@@ -88,7 +90,7 @@ weights['fc2_bias'].fill_(0.0)
 
 # Initialize the model and move to GPU
 model = CustomNet(weights, parasiticResistance, R_hrs, R_lrs, selected_model_function, device,
-                  debug=False, bits=quant_bits, correction=False, max_array_size=max_array_size).to(device)
+                    debug=False, bits=quant_bits, correction=False, max_array_size=max_array_size).to(device)
 
 # Initialize optimizer and loss function
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -139,8 +141,9 @@ for epoch in range(start_epoch, epochs):
     model.train()
     train_loss = 0
     correct = 0
-    
+
     for batch_idx, (data, target) in enumerate(train_loader):
+        batch_start_time = time.time()  # Start time for batch
         data, target = data.to(device), target.to(device)
 
         output = model(data)
@@ -159,9 +162,12 @@ for epoch in range(start_epoch, epochs):
         train_loss += loss.item()
         pred = output.argmax(dim=1, keepdim=True)
         correct += pred.eq(target.view_as(pred)).sum().item()
-        
-        if batch_idx % 100 == 0:
-            print(f'Epoch: {epoch + 1} [{batch_idx}/{len(train_loader)}], Loss: {loss.item():.4f}, Running Acc: {100. * correct / ((batch_idx+1) * batch_size):.2f}%')
+
+        if batch_idx % print_batches == 0:
+            batch_end_time = time.time()  # End time for batch
+            batch_time = batch_end_time - batch_start_time
+            batches_per_second = 1.0 / batch_time if batch_time > 0 else 0
+            print(f'Epoch: {epoch + 1} [{batch_idx}/{len(train_loader)}], Loss: {loss.item():.4f}, Running Acc: {100. * correct / ((batch_idx+1) * batch_size):.2f}%, Speed: {batches_per_second:.2f} batches/sec')
 
     train_loss /= len(train_loader.dataset)
     train_accuracy = 100. * correct / len(train_loader.dataset)
